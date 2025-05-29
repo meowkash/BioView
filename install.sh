@@ -6,7 +6,7 @@
 # --- Configuration Variables ---
 PYTHON_VERSION="python3.12"
 VENV_PATH="$HOME/.zapp/ven"
-
+UHD_URL="https://files.ettus.com/binaries/uhd/latest_release/"
 PACKAGE_DIR=""
 
 # --- Helper Functions ---
@@ -42,7 +42,7 @@ command_exists() {
 log_info "Starting project installation script..."
 mkdir $HOME/.zapp # Holds configurations and virtualenv
 
-# --- 0. Determine OS ---
+# --- Determine OS ---
 OS="unknown"
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     OS="linux"
@@ -54,55 +54,8 @@ fi
 
 log_info "Detected OS: $OS"
 
-# --- 1. Installing UHD ---
-log_info "Step 1: Installing UHD..."
-
-if [ "$OS" == "windows" ]; then
-    log_warn "For Windows, UHD installation is typically a manual process due to GUI installers."
-    log_warn "Please download the latest stable UHD installer from Ettus Research and install it manually."
-    log_info "Opening the Ettus Research UHD downloads page in your browser..."
-    # Attempt to open the URL. 'start' for Windows, 'open' for macOS, 'xdg-open' for Linux.
-    if command_exists "start"; then
-        start "https://www.ettus.com/support/downloads/uhd-images/"
-    elif command_exists "open"; then
-        open "https://www.ettus.com/support/downloads/uhd-images/"
-    elif command_exists "xdg-open"; then
-        xdg-open "https://www.ettus.com/support/downloads/uhd-images/"
-    else
-        log_warn "Could not open browser automatically. Please visit https://www.ettus.com/support/downloads/uhd-images/ manually."
-    fi
-    log_info "After installation, please ensure UHD drivers are correctly set up and recognized by your system."
-    read -p "Press Enter to continue after you have manually installed UHD..."
-elif [ "$OS" == "linux" ]; then
-    if command_exists "apt"; then
-        log_info "Detected Debian/Ubuntu based system. Installing UHD via apt..."
-        sudo apt update || log_error "Failed to update apt packages."
-        sudo apt install -y libuhd-dev uhd-host python3-uhd || log_error "Failed to install UHD packages via apt."
-    elif command_exists "dnf"; then
-        log_info "Detected Fedora/RHEL based system. Installing UHD via dnf..."
-        sudo dnf install -y uhd uhd-devel || log_error "Failed to install UHD packages via dnf."
-    else
-        log_error "Unsupported Linux distribution. Please install UHD manually."
-    fi
-elif [ "$OS" == "macos" ]; then
-    log_info "Detected macOS. Installing UHD via MacPorts..."
-    if ! command_exists "port"; then
-        log_warn "MacPorts not found. Please install MacPorts first."
-        log_info "Instructions: https://www.macports.org/install.php"
-        read -p "Press Enter to continue after you have installed MacPorts..."
-        if ! command_exists "port"; then
-            log_error "MacPorts still not found after user confirmation. Exiting."
-        fi
-    fi
-    sudo port selfupdate || log_error "Failed to update MacPorts."
-    sudo port install uhd uhd-devel || log_error "Failed to install UHD packages via MacPorts."
-else
-    log_error "UHD installation is not automated for your operating system ($OS). Please install UHD manually."
-fi
-log_success "UHD installation step completed (or manual instructions provided)."
-
-# --- 2. Install Python virtualenv and Poetry via pipx ---
-log_info "Step 2: Installing pipx, virtualenv, and poetry..."
+# --- Install Python virtualenv and Poetry via pipx ---
+log_info "Step 1: Installing pipx, virtualenv, and poetry..."
 
 if [ "$OS" == "linux" ]; then
     if command_exists "apt"; then
@@ -154,8 +107,8 @@ pipx install virtualenv || log_error "Failed to install virtualenv via pipx."
 pipx install poetry || log_error "Failed to install poetry via pipx."
 log_success "pipx, virtualenv, and poetry installed."
 
-# --- 3. Setup virtualenv ---
-log_info "Step 3: Setting up virtualenv..."
+# --- Setup virtualenv ---
+log_info "Step 2: Setting up virtualenv..."
 
 # Check if the specified Python version is available
 if ! command_exists "$PYTHON_VERSION"; then
@@ -166,8 +119,8 @@ log_info "Creating virtual environment at $VENV_PATH with $PYTHON_VERSION..."
 virtualenv --system-site-packages --python="$PYTHON_VERSION" "$VENV_PATH" || log_error "Failed to create virtual environment."
 log_success "Virtual environment created at $VENV_PATH."
 
-# --- 4. Install project dependencies with Poetry ---
-log_info "Step 4: Installing project dependencies with Poetry..."
+# --- Install project dependencies with Poetry ---
+log_info "Step 3: Installing project dependencies with Poetry..."
 
 # Activate the virtual environment
 log_info "Activating virtual environment..."
@@ -196,6 +149,54 @@ log_info "Navigating to $PROJECT_ROOT and running 'poetry install'..."
 (cd "$PROJECT_ROOT" && poetry install) || log_error "Failed to install project dependencies with Poetry. Ensure 'pyproject.toml' is in '$PROJECT_ROOT'."
 
 log_success "Project dependencies installed successfully!"
+
+# --- Installing UHD ---
+log_info "Step 4: Installing UHD..."
+
+if [ "$OS" == "windows" ]; then
+    log_warn "For Windows, UHD installation is typically a manual process due to GUI installers."
+    log_warn "Please download the latest stable UHD installer from Ettus Research and install it manually."
+    log_info "Opening the Ettus Research UHD downloads page in your browser..."
+    # Attempt to open the URL. 'start' for Windows, 'open' for macOS, 'xdg-open' for Linux.
+    if command_exists "start"; then
+        start $UHD_URL
+    elif command_exists "open"; then
+        open $UHD_URL
+    elif command_exists "xdg-open"; then
+        xdg-open $UHD_URL
+    else
+        log_warn "Could not open browser automatically. Please visit https://www.ettus.com/support/downloads/uhd-images/ manually."
+    fi
+    log_info "After installation, please ensure UHD drivers are correctly set up and recognized by your system."
+    read -p "Press Enter to continue after you have manually installed UHD..."
+    pip install uhd || log_error "Failed to pip install uhd. You may have to manually install uhd later"
+elif [ "$OS" == "linux" ]; then
+    if command_exists "apt"; then
+        log_info "Detected Debian/Ubuntu based system. Installing UHD via apt..."
+        sudo apt update || log_error "Failed to update apt packages."
+        sudo apt install -y libuhd-dev uhd-host python3-uhd || log_error "Failed to install UHD packages via apt."
+    elif command_exists "dnf"; then
+        log_info "Detected Fedora/RHEL based system. Installing UHD via dnf..."
+        sudo dnf install -y uhd uhd-devel || log_error "Failed to install UHD packages via dnf."
+    else
+        log_error "Unsupported Linux distribution. Please install UHD manually."
+    fi
+elif [ "$OS" == "macos" ]; then
+    log_info "Detected macOS. Installing UHD via MacPorts..."
+    if ! command_exists "port"; then
+        log_warn "MacPorts not found. Please install MacPorts first."
+        log_info "Instructions: https://www.macports.org/install.php"
+        read -p "Press Enter to continue after you have installed MacPorts..."
+        if ! command_exists "port"; then
+            log_error "MacPorts still not found after user confirmation. Exiting."
+        fi
+    fi
+    sudo port selfupdate || log_error "Failed to update MacPorts."
+    sudo port install uhd uhd-devel || log_error "Failed to install UHD packages via MacPorts."
+else
+    log_error "UHD installation is not automated for your operating system ($OS). Please install UHD manually."
+fi
+log_success "UHD installation step completed (or manual instructions provided)."
 
 # --- Final Instructions ---
 log_info "Installation complete!"

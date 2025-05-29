@@ -27,7 +27,7 @@ The project is supported on the following operating systems -
 
 ### Instructions
 
-The installation requires you to have ```git``` installed in your system. In a terminal window, follow the steps below -
+The installation requires you to have ```git``` installed in your system. In a terminal window, follow the steps listed below. *On Windows, use Git Bash for this. On Linux and macOS, use the native terminal app.*
 
 ```bash
 # Clone repository 
