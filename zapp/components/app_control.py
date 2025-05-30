@@ -9,10 +9,10 @@ class AppControlPanel(QGroupBox):
     # Define signals to emit changes to connection status
     # This is left verbose for cleaner debugging
     connectionInitiated = pyqtSignal()
-    biopacEnabled = pyqtSignal(bool)
     startRequested = pyqtSignal()
     stopRequested = pyqtSignal() 
     saveRequested = pyqtSignal(bool)
+    instructionsEnabled = pyqtSignal(bool)
     balanceRequested = pyqtSignal()
     
     def __init__(self, parent=None):
@@ -30,11 +30,6 @@ class AppControlPanel(QGroupBox):
         self.connect_button.clicked.connect(self.on_connect_clicked)
         layout.addWidget(self.connect_button)
         
-        # BIOPAC Connection
-        self.biopac_checkbox = QCheckBox(' BIOPAC ?')
-        self.biopac_checkbox.clicked.connect(self.on_biopac_toggled)
-        layout.addWidget(self.biopac_checkbox)
-        
         # Start Button
         self.start_button = QPushButton('   Start')
         self.start_button.setIcon(qta.icon('fa6s.play', color=get_qcolor('green')))
@@ -47,6 +42,11 @@ class AppControlPanel(QGroupBox):
         self.save_checkbox = QCheckBox(' Save ?')
         self.save_checkbox.clicked.connect(self.on_save_toggled)
         layout.addWidget(self.save_checkbox)
+        
+        # Instructions Checkbox (for audio/popups, etc)
+        self.instructions_checkbox = QCheckBox(' Instructions ?')
+        self.instructions_checkbox.clicked.connect(self.on_instructions_toggled)
+        layout.addWidget(self.instructions_checkbox)
         
         # Stop Button
         self.stop_button = QPushButton('   Stop')
@@ -115,9 +115,9 @@ class AppControlPanel(QGroupBox):
             self.saveRequested.emit(True)
         else:
             self.saveRequested.emit(False)
-            
-    def on_biopac_toggled(self):
-        if self.save_checkbox.isEnabled(): 
-            self.biopacEnabled.emit(True)
+    
+    def on_instructions_toggled(self): 
+        if self.instructions_checkbox.isEnabled(): 
+            self.instructionsEnabled.emit(True)
         else:
-            self.biopacEnabled.emit(False)
+            self.instructionsEnabled.emit(False)

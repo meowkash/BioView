@@ -302,12 +302,11 @@ class PlotGrid(QWidget):
             max_queue = max(max_queue, queue_size)
         
         if max_queue > 100:  # Threshold for concern
-            self.logEvent.emit('warning', f'Plot queues getting large - max: {max_queue}, total: {total_queued}. Consider reducing data rate or increasing processing.')
+            self.logEvent.emit('debug', f'Plot queues getting large - max: {max_queue}, total: {total_queued}. Consider reducing data rate or increasing processing.')
         elif total_queued > 0:
             self.logEvent.emit('debug', f'Active plot queues - max: {max_queue}, total: {total_queued}')
             
     def set_display_time(self, dur):
-        """Update display duration for all plots"""
         self.display_duration = dur
         for r in range(self.rows):
             for c in range(self.cols):

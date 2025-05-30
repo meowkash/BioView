@@ -50,12 +50,12 @@ class ReceiveWorker(QThread):
         
         # When using multiple devices, we need to set stream_now to False to align time edges of packets  
         stream_cmd.stream_now = False
-        stream_cmd.time_spec = self.usrp.get_time_now() + uhd.types.TimeSpec(SETTLING_TIME)
+        stream_cmd.time_spec = uhd.types.TimeSpec(self.usrp.get_time_now().get_real_secs() + INIT_DELAY)
         self.rx_streamer.issue_stream_cmd(stream_cmd)
         
         # Initialize 
         total_samps_received = 0 
-        timeout = SETTLING_TIME # Larger timeout initially
+        timeout = 0.5 # Larger timeout initially
         had_an_overflow = False
         last_overflow = uhd.types.TimeSpec(0)
     
@@ -81,7 +81,7 @@ class ReceiveWorker(QThread):
                 self.logEvent.emit('error', f'Receiver Runtime Eror: {ex}')
                 continue
 
-            timeout = 0.05 # Reduce timeout for subsequent transmissions
+            timeout = INIT_DELAY # Reduce timeout for subsequent transmissions
         
             # Reference: uhd/examples/python/benchmark_rate.py
             # Handle the error codes
@@ -117,7 +117,7 @@ class ReceiveWorker(QThread):
             # Copy samples to avoid buffer overwrite and put in queue
             # recv_buffer.dtype = np.complex64 (since default cpu_format = 'fc32')
             try:
-                self.rx_queue.put_nowait((recv_buffer))
+                self.rx_queue.put((recv_buffer))
             except queue.Full:
                 self.logEvent.emit('warning', 'Rx Queue full, dropping buffer')
             except queue.Empty: 

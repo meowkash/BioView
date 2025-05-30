@@ -82,7 +82,7 @@ class SaveWorker(QThread):
             # Check for significant discontinuity
             discontinuity = abs(data[0] - self.last_samples[channel_key])
             if discontinuity > 3 * np.std(data[:min(100, len(data))]):
-                self.logEvent.emit('warning', f'Potential discontinuity detected in {channel_key}')
+                self.logEvent.emit('debug', f'Potential discontinuity detected in {channel_key}')
         
         # Store last sample for next buffer
         if not hasattr(self, 'last_samples'):
@@ -156,7 +156,7 @@ class SaveWorker(QThread):
         return save_list
     
     def run(self):
-        self.logEvent.emit('info', 'Saving started')
+        self.logEvent.emit('debug', 'Saving started')
         
         # Preallocate empty buffer to get
         data_buf = []
@@ -202,7 +202,7 @@ class SaveWorker(QThread):
                 self.logEvent.emit('error', f'Saving error: {e}')
                 continue
                 
-        self.logEvent.emit('info', 'Saving stopped')
+        self.logEvent.emit('debug', 'Saving stopped')
         
     def stop(self):
         self.running = False

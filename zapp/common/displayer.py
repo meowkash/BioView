@@ -48,7 +48,7 @@ class DisplayWorker(QThread):
         return np.array(disp_data)
     
     def run(self):
-        self.logEvent.emit('info', 'Display started')
+        self.logEvent.emit('debug', 'Display started')
         
         while self.running:
             try:

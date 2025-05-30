@@ -13,7 +13,7 @@ from PyQt6.QtCore import QMutex
 from zapp.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel
 from zapp.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
 from zapp.usrp import UsrpController, UsrpReceiver, UsrpTransmitter
-from zapp.common import SaveWorker, DisplayWorker
+from zapp.common import SaveWorker, DisplayWorker, InstructionsWorker
 from zapp.biopac import BiopacController
 from zapp.utils import get_channel_map
     
@@ -40,6 +40,7 @@ class Zapp(QMainWindow):
         self.connection_status = ConnectionStatus.DISCONNECTED
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False 
+        self.enable_instructions = False
         
         ### Populate list of devices 
         self.devices = {} 
@@ -70,6 +71,7 @@ class Zapp(QMainWindow):
         # Common
         self.save_thread = None 
         self.display_thread = None 
+        self.instructions_thread = None
         
         ### Data Queues
         self.rx_queues = [queue.Queue() for _ in range(len(self.usrp_config))]
@@ -107,6 +109,7 @@ class Zapp(QMainWindow):
         self.app_control_panel.startRequested.connect(self.start_recording)
         self.app_control_panel.stopRequested.connect(self.stop_recording)
         self.app_control_panel.saveRequested.connect(self.update_save_state)
+        self.app_control_panel.instructionsEnabled.connect(self.toggle_instructions)
         self.app_control_panel.balanceRequested.connect(self.balance_signals)
         
         experiment_layout = QHBoxLayout()
@@ -205,6 +208,9 @@ class Zapp(QMainWindow):
         self.exp_config.channel_ifs = channel_ifs
         
     def _generate_biopac_mappings(self):
+        if self.bio_config is None:
+            return 
+        
         ### Generate Biopac channel labels:data queue index mapping
         for ch in self.bio_config.channels: 
             label = f'{self.bio_config.device_name}_Ch{ch}'
@@ -265,6 +271,18 @@ class Zapp(QMainWindow):
             )
             self.usrp_tx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
             self.usrp_tx_thread[idx].start()
+         
+        # Start receiving threads
+        for idx, cfg in enumerate(self.usrp_config):
+            self.usrp_rx_thread[idx] = UsrpReceiver(
+                usrp = self.usrps[idx], 
+                config = cfg, 
+                rx_streamer = self.rx_streamers[idx], 
+                rx_queue = self.rx_queues[idx],
+                running = self.running_status.value
+            )
+            self.usrp_rx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
+            self.usrp_rx_thread[idx].start()
         
         # Start display thread 
         self.display_thread = DisplayWorker(
@@ -288,18 +306,12 @@ class Zapp(QMainWindow):
         self.save_thread.logEvent.connect(self.log_display_panel.log_message)
         self.save_thread.start()
         
-        # Start receiving threads
-        for idx, cfg in enumerate(self.usrp_config):
-            self.usrp_rx_thread[idx] = UsrpReceiver(
-                usrp = self.usrps[idx], 
-                config = cfg, 
-                rx_streamer = self.rx_streamers[idx], 
-                rx_queue = self.rx_queues[idx],
-                running = self.running_status.value
-            )
-            self.usrp_rx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
-            self.usrp_rx_thread[idx].start()
-        
+        # Start instructions
+        if self.enable_instructions:
+            self.instructions_thread = InstructionsWorker(config = self.exp_config)
+            self.instructions_thread.logEvent.connect(self.log_display_panel.log_message)
+            self.instructions_thread.start()
+            
         # Update UI 
         self.update_buttons()
          
@@ -313,6 +325,10 @@ class Zapp(QMainWindow):
             if rx_thread is not None: 
                 rx_thread.stop()
         
+        # Stop instruction 
+        if self.instructions_thread is not None:
+            self.instructions_thread.stop()
+            
         # Stop saving thread
         if self.save_thread is not None: 
             self.save_thread.stop()
@@ -396,6 +412,9 @@ class Zapp(QMainWindow):
     
     def update_save_state(self, flag): 
         self.saving_status = flag
+        
+    def toggle_instructions(self, flag):
+        self.enable_instructions = flag
         
     def closeEvent(self, a0):
         # Ensure all threads are closed

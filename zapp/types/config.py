@@ -111,6 +111,10 @@ class ExperimentConfiguration():
                  disp_channels: list = None,
                  save_phase: bool = True,
                  show_phase: bool = False,
+                 loop_instructions: bool = True,
+                 instruction_type: str = None, 
+                 instruction_file: list[str] = [], 
+                 instruction_interval: int = 5000, 
                  **kwargs
         ):
         self.save_dir = save_dir
@@ -131,15 +135,33 @@ class ExperimentConfiguration():
         self.data_mapping = {}
         self.display_sources = [] # Collection of all things to display 
 
+        ### Common functionality for instructions 
+        self.loop_instructions = loop_instructions
+        self.instruction_type = instruction_type # Typically audio or text
+        self.instruction_file = instruction_file
+        self.instruction_interval = instruction_interval 
+        
         # Add mutex to make updates thread safe
         self.mutex = QMutex()
         
     def set_param_value(self, param, value):
         self.mutex.lock()
         # Ensure we match types 
-        current_type = type(getattr(self, param))
-        setattr(self, param, current_type(value))
+        current_type = type(getattr(self, param, None))
+        if current_type is not None:
+            setattr(self, param, current_type(value))
+        else:
+            setattr(self, param, value)
         self.mutex.unlock()
+    
+    def get_param(self, param, default_value = None):
+        self.mutex.lock()
+        try:
+            value = getattr(self, param)  
+        except:
+            value = default_value 
+        self.mutex.unlock()
+        return value
         
     def get_log_path(self): 
         return get_unique_path(self.save_dir, f'{self.file_name}.log')

@@ -3,7 +3,7 @@ import math
 import numpy as np 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.constants import FILLING_TIME
+from zapp.constants import INIT_DELAY
 from zapp.types import UsrpConfiguration
 
 class TransmitWorker(QThread):
@@ -69,7 +69,7 @@ class TransmitWorker(QThread):
         tx_metadata.start_of_burst = True
         tx_metadata.end_of_burst = False
         tx_metadata.has_time_spec = True
-        tx_metadata.time_spec = uhd.types.TimeSpec(FILLING_TIME)   
+        tx_metadata.time_spec = uhd.types.TimeSpec(self.usrp.get_time_now().get_real_secs() + INIT_DELAY)
             
         while self.running:
             # Check for updated parameters 
@@ -98,7 +98,7 @@ class TransmitWorker(QThread):
         # End transmission
         tx_metadata.end_of_burst = True
         self.tx_streamer.send(np.zeros_like(self.tx_waveform), tx_metadata)
-        self.logEvent.emit('info', 'Transmission Stopped')
+        self.logEvent.emit('debug', 'Transmission Stopped')
     
     def stop(self):
         self.running = False
