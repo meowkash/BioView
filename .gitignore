@@ -181,3 +181,4 @@ cython_debug/
 
 # Ignore BIOPAC *.dll files for IP reasons 
 **/mpdev.*
+**/poetry.lock
