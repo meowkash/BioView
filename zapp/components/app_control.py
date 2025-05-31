@@ -111,13 +111,13 @@ class AppControlPanel(QGroupBox):
         self.balanceRequested.emit()
         
     def on_save_toggled(self): 
-        if self.save_checkbox.isEnabled(): 
+        if self.save_checkbox.isChecked(): 
             self.saveRequested.emit(True)
         else:
             self.saveRequested.emit(False)
     
     def on_instructions_toggled(self): 
-        if self.instructions_checkbox.isEnabled(): 
+        if self.instructions_checkbox.isChecked(): 
             self.instructionsEnabled.emit(True)
         else:
             self.instructionsEnabled.emit(False)

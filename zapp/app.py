@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSta
 from PyQt6.QtGui import QIcon, QGuiApplication
 from PyQt6.QtCore import QMutex
 
-from zapp.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel
+from zapp.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel, TextDialog
 from zapp.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
 from zapp.usrp import UsrpController, UsrpReceiver, UsrpTransmitter
 from zapp.common import SaveWorker, DisplayWorker, InstructionsWorker
@@ -40,7 +40,16 @@ class Zapp(QMainWindow):
         self.connection_status = ConnectionStatus.DISCONNECTED
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False 
-        self.enable_instructions = False
+        
+        ### Track instruction
+        if exp_config.get_param('instruction_type') is None:
+            self.enable_instructions = False
+        else: 
+            self.enable_instructions = True 
+        
+        self.instruction_dialog = None     
+        if exp_config.get_param('instruction_type') == 'text':
+            self.instruction_dialog = TextDialog() 
         
         ### Populate list of devices 
         self.devices = {} 
@@ -309,9 +318,13 @@ class Zapp(QMainWindow):
         # Start instructions
         if self.enable_instructions:
             self.instructions_thread = InstructionsWorker(config = self.exp_config)
+            self.instructions_thread.textUpdate.connect(self.instruction_dialog.update_instruction_text)
             self.instructions_thread.logEvent.connect(self.log_display_panel.log_message)
             self.instructions_thread.start()
             
+        # Start all threads together 
+        
+        
         # Update UI 
         self.update_buttons()
          
@@ -415,8 +428,11 @@ class Zapp(QMainWindow):
         
     def toggle_instructions(self, flag):
         self.enable_instructions = flag
+        if self.instruction_dialog is not None: 
+            self.instruction_dialog.toggle_ui(self.enable_instructions)
         
     def closeEvent(self, a0):
         # Ensure all threads are closed
         self.stop_recording()
         return super().closeEvent(a0)
+    
