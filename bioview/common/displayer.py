@@ -3,8 +3,8 @@ import numpy as np
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.utils import get_filter, apply_filter
-from zapp.types import ExperimentConfiguration
+from bioview.utils import get_filter, apply_filter
+from bioview.types import ExperimentConfiguration
 
 class DisplayWorker(QThread):
     dataReady = pyqtSignal(np.ndarray)

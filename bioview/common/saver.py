@@ -3,9 +3,9 @@ import numpy as np
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.utils import init_save_file, update_save_file, get_filter, apply_filter
-from zapp.constants import SAVE_BUFFER_SIZE
-from zapp.types import UsrpConfiguration, ExperimentConfiguration
+from bioview.utils import init_save_file, update_save_file, get_filter, apply_filter
+from bioview.constants import SAVE_BUFFER_SIZE
+from bioview.types import UsrpConfiguration, ExperimentConfiguration
 
 class SaveWorker(QThread):
     data_ready = pyqtSignal(dict)

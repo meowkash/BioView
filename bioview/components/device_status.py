@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel
 from PyQt6.QtCore import QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor, QPen
 
-from zapp.types import ConnectionStatus
+from bioview.types import ConnectionStatus
 
 class LEDIndicator(QWidget):
     ''' Indicate device status using the following codes - 

@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path 
 from datetime import datetime, timedelta
 
-from zapp.constants import CLOCK_TIMEOUT
+from bioview.constants import CLOCK_TIMEOUT
 
 def _check_pairing(r_idx, t_idx, rx_cumsum, tx_cumsum, pair_list): 
     fn = lambda x, y: (np.where(x - y < 0))[0][0]

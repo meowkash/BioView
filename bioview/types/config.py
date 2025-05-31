@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QMutex
 
-from zapp.utils import get_unique_path
+from bioview.utils import get_unique_path
 
 ''' 
 We make some general assumptions, specifically - 

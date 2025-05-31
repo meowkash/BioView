@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, QMutex, QMutexLocker
 
-from zapp.types import ExperimentConfiguration
+from bioview.types import ExperimentConfiguration
 
 # Each instruction handler should be its own QObject 
 class AudioPlayer(QObject):

@@ -1,5 +1,5 @@
 from enum import Enum 
-from zapp.utils import get_qcolor
+from bioview.utils import get_qcolor
 
 # Handle connection as an enum for better clarity
 class ConnectionStatus(Enum): 

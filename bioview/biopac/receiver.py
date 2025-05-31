@@ -2,8 +2,8 @@ from ctypes import byref, c_double
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.types import BiopacConfiguration
-from zapp.utils import wrap_result_code
+from bioview.types import BiopacConfiguration
+from bioview.utils import wrap_result_code
 
 class ReceiveWorker(QThread):
     logEvent = pyqtSignal(str, str)

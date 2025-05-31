@@ -2,7 +2,7 @@ import ctypes
 import os 
 from pathlib import Path
 
-from zapp.constants import BIOPAC_CONNECTION_CODES
+from bioview.constants import BIOPAC_CONNECTION_CODES
 
 def load_mpdev_dll(custom_loc: str = None): 
     dll = None

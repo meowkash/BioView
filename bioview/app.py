@@ -10,14 +10,14 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSta
 from PyQt6.QtGui import QIcon, QGuiApplication
 from PyQt6.QtCore import QMutex
 
-from zapp.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel, TextDialog
-from zapp.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
-from zapp.usrp import UsrpController, UsrpReceiver, UsrpTransmitter
-from zapp.common import SaveWorker, DisplayWorker, InstructionsWorker
-from zapp.biopac import BiopacController
-from zapp.utils import get_channel_map
+from bioview.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel, TextDialog
+from bioview.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
+from bioview.usrp import UsrpController, UsrpReceiver, UsrpTransmitter
+from bioview.common import SaveWorker, DisplayWorker, InstructionsWorker
+from bioview.biopac import BiopacController
+from bioview.utils import get_channel_map
     
-class Zapp(QMainWindow):
+class Viewer(QMainWindow):
     def __init__(self, 
                  exp_config: ExperimentConfiguration, 
                  usrp_config: list[UsrpConfiguration] = None,
@@ -91,7 +91,7 @@ class Zapp(QMainWindow):
     
     def _init_ui(self): 
         ### Define main wndow
-        self.setWindowTitle('Zapp')
+        self.setWindowTitle('BioView')
         scriptDir = os.path.dirname(os.path.realpath(__file__))
         self.setWindowIcon(QIcon(os.path.join(scriptDir, 'assets', 'icon.png')))
         screen = QGuiApplication.primaryScreen().geometry()
@@ -359,7 +359,7 @@ class Zapp(QMainWindow):
         self.update_buttons()
      
     def balance_signals(self):
-        # Implement signal balancing here 
+        # TODO: Implement signal balancing here 
         pass 
       
     def update_buttons(self): 

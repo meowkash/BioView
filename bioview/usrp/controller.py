@@ -2,7 +2,7 @@ import uhd
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.utils import setup_ref, setup_pps, check_channels, get_usrp_address, update_usrp_address 
+from bioview.utils import setup_ref, setup_pps, check_channels, get_usrp_address, update_usrp_address 
 
 class Controller(QThread):
     initSucceeded = pyqtSignal(uhd.usrp.MultiUSRP, object, object)

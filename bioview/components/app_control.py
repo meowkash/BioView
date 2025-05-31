@@ -2,8 +2,8 @@ import qtawesome as qta
 from PyQt6.QtWidgets import QGroupBox, QPushButton, QHBoxLayout, QLabel, QCheckBox
 from PyQt6.QtCore import pyqtSignal, QEvent
 
-from zapp.types import ConnectionStatus, RunningStatus
-from zapp.utils import get_qcolor
+from bioview.types import ConnectionStatus, RunningStatus
+from bioview.utils import get_qcolor
 
 class AppControlPanel(QGroupBox):
     # Define signals to emit changes to connection status
@@ -60,7 +60,7 @@ class AppControlPanel(QGroupBox):
         self.balance_signal_button = QPushButton('   Balance Signal')
         self.balance_signal_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
         self.balance_signal_button.setStyleSheet(f'padding: {padlen}px;')
-        self.balance_signal_button.setEnabled(True)
+        self.balance_signal_button.setEnabled(False)
         self.balance_signal_button.clicked.connect(self.on_balance_clicked)
         layout.addWidget(self.balance_signal_button)
         
@@ -88,11 +88,13 @@ class AppControlPanel(QGroupBox):
             self.stop_button.setEnabled(running_status == RunningStatus.RUNNING)
             self.save_checkbox.setEnabled(running_status == RunningStatus.STOPPED)
             self.connect_button.setEnabled(False)
+            self.balance_signal_button.setEnabled(True) 
         elif connection_status == ConnectionStatus.DISCONNECTED: 
             self.connect_button.setEnabled(True)
             self.start_button.setEnabled(False)
             self.save_checkbox.setEnabled(True)
             self.stop_button.setEnabled(False)
+            self.balance_signal_button.setEnabled(False)
         elif connection_status == ConnectionStatus.CONNECTING: 
             self.connect_button.setEnabled(False)
             self.start_button.setEnabled(False)

@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QModelIndex
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 
-from zapp.types import ConnectionStatus, RunningStatus
-from zapp.utils import get_qcolor
+from bioview.types import ConnectionStatus, RunningStatus
+from bioview.utils import get_qcolor
 
 class CheckableListView(QListView):
     def __init__(self, combo_box):

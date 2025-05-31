@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QWidget, QGridLayout
 from PyQt6.QtCore import pyqtSignal, QTimer, QEvent
 from PyQt6.QtGui import QGuiApplication
 
-from zapp.utils import get_color_by_idx
+from bioview.utils import get_color_by_idx
 
 class PlotManager(): 
     def __init__(self, 

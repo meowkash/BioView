@@ -3,8 +3,8 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.constants import INIT_DELAY, SETTLING_TIME, SAVE_BUFFER_SIZE
-from zapp.types import UsrpConfiguration
+from bioview.constants import INIT_DELAY, SETTLING_TIME, SAVE_BUFFER_SIZE
+from bioview.types import UsrpConfiguration
 
 class ReceiveWorker(QThread):
     logEvent = pyqtSignal(str, str)

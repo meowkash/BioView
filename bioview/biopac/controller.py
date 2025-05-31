@@ -2,8 +2,8 @@ from ctypes import c_int, c_double, byref
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.utils import load_mpdev_dll, wrap_result_code
-from zapp.constants import BIOPAC_CONNECTION_CODES
+from bioview.utils import load_mpdev_dll, wrap_result_code
+from bioview.constants import BIOPAC_CONNECTION_CODES
 
 class Controller(QThread):
     initSucceeded = pyqtSignal(object)

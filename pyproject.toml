@@ -1,5 +1,5 @@
 [project]
-name = "zapp"
+name = "bioview"
 version = "0.9.0"
 description = "A versatile, extensible, and performant cross-platform app for biomedical and human-computer interface instrumentation control"
 authors = [

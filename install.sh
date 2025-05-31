@@ -5,7 +5,7 @@
 
 # --- Configuration Variables ---
 PYTHON_VERSION="python3.12"
-VENV_PATH="$HOME/.zapp/ven"
+VENV_PATH="$HOME/.bioview/ven"
 UHD_URL="https://files.ettus.com/binaries/uhd/latest_release/"
 PACKAGE_DIR=""
 
@@ -40,7 +40,7 @@ command_exists() {
 # --- Main Installation Logic ---
 
 log_info "Starting project installation script..."
-mkdir $HOME/.zapp # Holds configurations and virtualenv
+mkdir $HOME/.bioview # Holds configurations and virtualenv
 
 # --- Determine OS ---
 OS="unknown"

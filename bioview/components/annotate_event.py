@@ -4,7 +4,7 @@ import qtawesome as qta
 from PyQt6.QtWidgets import QGroupBox, QHBoxLayout, QPlainTextEdit, QToolButton
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 
-from zapp.utils import get_qcolor
+from bioview.utils import get_qcolor
 
 class AnnotateEventPanel(QGroupBox):
     logEvent = pyqtSignal(str, str)

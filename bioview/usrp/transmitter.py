@@ -3,8 +3,8 @@ import math
 import numpy as np 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from zapp.constants import INIT_DELAY
-from zapp.types import UsrpConfiguration
+from bioview.constants import INIT_DELAY
+from bioview.types import UsrpConfiguration
 
 class TransmitWorker(QThread):
     logEvent = pyqtSignal(str, str)

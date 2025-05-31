@@ -1,7 +1,7 @@
 import darkdetect 
 from PyQt6.QtGui import QColor
 
-from zapp.constants import COLOR_SCHEME
+from bioview.constants import COLOR_SCHEME
 
 def get_qcolor(name): 
     return QColor(*get_color_tuple(name))

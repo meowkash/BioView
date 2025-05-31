@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 def _get_cache_file(file_name): 
-    cache_file = Path.home() / '.zapp' / file_name
+    cache_file = Path.home() / '.bioview' / file_name
     
     if not cache_file.exists():
         cache_file.parent.mkdir(parents=False, exist_ok=True)

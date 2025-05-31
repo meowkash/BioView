@@ -1,8 +1,8 @@
-# Zapp
+# BioView
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-Zapp is a versatile, extensible, and performant cross-platform app for biomedical and human-computer interface instrumentation control, including Ettus USRPs and BIOPAC devices.
+BioView is a versatile, extensible, and performant cross-platform app for biomedical and human-computer interface instrumentation control, including Ettus USRPs and BIOPAC devices.
 
 ## Features
 
@@ -32,24 +32,24 @@ The installation requires you to have ```git``` installed in your system. In a t
 ```bash
 # Clone repository 
 cd ~ 
-git clone https://github.com/meowkash/Zapp.git 
+git clone https://github.com/meowkash/bioview.git 
 
 # Run installer script
-cd Zapp
+cd bioview
 chmod +x install.sh
 ./install.sh 
 ```
 
 ## Usage
 
-In order to run an experiment using Zapp, you need to create an executable file similar to the example below -
+In order to run an experiment using bioview, you need to create an executable file similar to the example below -
 
 ```Python
 import sys 
 import faulthandler
 
-from zapp.app import Zapp
-from zapp.constants import UsrpConfiguration, ExperimentConfiguration
+from bioview.app import Viewer
+from bioview.constants import UsrpConfiguration, ExperimentConfiguration
 
 from PyQt6.QtWidgets import QApplication
 
@@ -83,7 +83,7 @@ usrp = UsrpConfiguration(
 
 app = QApplication(sys.argv)
 
-window = Zapp(exp_config=exp_config,
+window = Viewer(exp_config=exp_config,
                     usrp_config=[usrp])
 window.show()
 
@@ -114,7 +114,7 @@ Check `crash.log` for detailed error information and diagnostic data.
 ### Structure
 
 ```bash
-zapp/
+bioview/
 ├── app.py              # Main application
 ├── usrp/               # USRP core functionality
 ├── common/             # Common functionality
