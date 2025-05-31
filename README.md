@@ -17,27 +17,21 @@ BioView is a versatile, extensible, and performant cross-platform app for biomed
 
 ## Installation
 
-### Supported Operating Systems
-
-The project is supported on the following operating systems -
+BioView should run on all platforms but is officially supported on the following platforms -
 
 * **Windows**
-* **macOS**
-* **Linux:** Ubuntu, Debian, Fedora, and RHEL
+* **Linux:** Ubuntu, Debian, and derivative distributions.
+  * Fedora and RHEL based distributions do not bundle in Python bindings for ```uhd``` and require manually buildng from source.
+  
+```uhd``` is required to be installed for the system before installing this project. You can install it by following the [official instructions](https://files.ettus.com/manual/page_install.html). 
 
-### Instructions
-
-The installation requires you to have ```git``` installed in your system. In a terminal window, follow the steps listed below. *On Windows, use Git Bash for this. On Linux and macOS, use the native terminal app.*
+Once ```uhd``` is installed, installing BioView is as simple as running the following command(s).
 
 ```bash
-# Clone repository 
-cd ~ 
-git clone https://github.com/meowkash/bioview.git 
+pip install bioview
 
-# Run installer script
-cd bioview
-chmod +x install.sh
-./install.sh 
+# If you are using Ubuntu/Debian based distributions
+sudo apt install python3-uhd
 ```
 
 ## Usage
@@ -125,12 +119,22 @@ bioview/
 └── constants/          # App-specific constants
 ```
 
-### Contributing
+### Instructions
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/new-feature`)
-3. Make your changes and run tests
-4. Submit a pull request
+Contributing changes requires you to have ```git``` installed in your system to be able to install the editable version of the app. In a terminal window, follow the steps listed below. *On Windows, use Git Bash for this. On Linux and macOS, use the native terminal app.*
+
+```bash
+# Clone repository 
+cd ~ 
+git clone https://github.com/meowkash/bioview.git 
+
+# Run installer script
+cd bioview
+chmod +x install.sh
+./install.sh 
+```
+
+Ensure you make your changes in forks and submit PRs for review.
 
 ## License
 
