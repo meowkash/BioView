@@ -1,48 +1,24 @@
 #!/bin/bash
 
-# This script automates the installation process for the project across Linux, macOS, and Windows.
-# It handles UHD installation, Python virtual environment setup, and project dependency installation.
+# Automated installation script for Linux, macOS, and Windows
+# Handles Python 3.12, UHD installation, and project dependencies
 
-# --- Configuration Variables ---
 PYTHON_VERSION="python3.12"
-VENV_PATH="$HOME/.bioview/ven"
+VENV_PATH="$HOME/.bioview/venv"
 UHD_URL="https://files.ettus.com/binaries/uhd/latest_release/"
 PACKAGE_DIR=""
 
-# --- Helper Functions ---
+# Helper Functions
+log_info() { echo -e "\n\033[1;34m[INFO]\033[0m $1"; }
+log_success() { echo -e "\n\033[1;32m[SUCCESS]\033[0m $1"; }
+log_warn() { echo -e "\n\033[1;33m[WARNING]\033[0m $1"; }
+log_error() { echo -e "\n\033[1;31m[ERROR]\033[0m $1"; exit 1; }
+command_exists() { command -v "$1" >/dev/null 2>&1; }
 
-# Function to display messages
-log_info() {
-    echo -e "\n\033[1;34m[INFO]\033[0m $1"
-}
+log_info "Starting project installation..."
+mkdir -p $HOME/.bioview
 
-# Function to display success messages
-log_success() {
-    echo -e "\n\033[1;32m[SUCCESS]\033[0m $1"
-}
-
-# Function to display warning messages
-log_warn() {
-    echo -e "\n\033[1;33m[WARNING]\033[0m $1"
-}
-
-# Function to display error messages and exit
-log_error() {
-    echo -e "\n\033[1;31m[ERROR]\033[0m $1"
-    exit 1
-}
-
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# --- Main Installation Logic ---
-
-log_info "Starting project installation script..."
-mkdir $HOME/.bioview # Holds configurations and virtualenv
-
-# --- Determine OS ---
+# Determine OS
 OS="unknown"
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     OS="linux"
@@ -54,157 +30,137 @@ fi
 
 log_info "Detected OS: $OS"
 
-# --- Install Python virtualenv and Poetry via pipx ---
-log_info "Step 1: Installing pipx, virtualenv, and poetry..."
+# Install Python 3.12 if not available
+log_info "Step 1: Ensuring Python 3.12 is installed..."
+
+if ! command_exists "$PYTHON_VERSION"; then
+    log_warn "Python 3.12 not found. Installing..."
+    
+    if [ "$OS" == "linux" ]; then
+        if command_exists "apt"; then
+            sudo apt update
+            sudo apt install -y software-properties-common
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt update
+            sudo apt install -y python3.12 python3.12-venv python3.12-dev
+        elif command_exists "dnf"; then
+            sudo dnf install -y python3.12 python3.12-devel
+        else
+            log_error "Unsupported Linux distribution. Please install Python 3.12 manually."
+        fi
+    elif [ "$OS" == "macos" ]; then
+        if ! command_exists "brew"; then
+            log_info "Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        fi
+        brew install python@3.12
+        # Create symlink for python3.12 command
+        ln -sf $(brew --prefix)/bin/python3.12 /usr/local/bin/python3.12 2>/dev/null || true
+    elif [ "$OS" == "windows" ]; then
+        log_info "Please install Python 3.12 from Microsoft Store:"
+        log_info "1. Open Microsoft Store"
+        log_info "2. Search for 'Python 3.12'"
+        log_info "3. Install Python 3.12 from Python Software Foundation"
+        if command_exists "winget"; then
+            log_info "Attempting automatic installation via winget..."
+            winget install Python.Python.3.12 || log_warn "Winget installation failed, please install manually."
+        fi
+        read -p "Press Enter after installing Python 3.12..."
+    fi
+    
+    # Verify installation
+    if ! command_exists "$PYTHON_VERSION"; then
+        log_error "Python 3.12 installation failed or not in PATH."
+    fi
+fi
+
+log_success "Python 3.12 is available."
+
+# Install pipx, virtualenv, and poetry
+log_info "Step 2: Installing pipx, virtualenv, and poetry..."
 
 if [ "$OS" == "linux" ]; then
     if command_exists "apt"; then
-        log_info "Installing pipx via apt..."
-        sudo apt install -y pipx || log_error "Failed to install pipx via apt."
+        sudo apt install -y pipx
     elif command_exists "dnf"; then
-        log_info "Installing pipx via dnf..."
-        sudo dnf install -y pipx || log_error "Failed to install pipx via dnf."
+        sudo dnf install -y pipx
     else
-        log_error "Unsupported Linux distribution for pipx installation. Please install pipx manually (e.g., 'python3 -m pip install --user pipx')."
+        $PYTHON_VERSION -m pip install --user pipx
     fi
-    # Ensure pipx path is in PATH for current session
-    python3 -m pipx ensurepath || log_error "Failed to ensure pipx path."
+    $PYTHON_VERSION -m pipx ensurepath
 elif [ "$OS" == "macos" ]; then
-    if ! command_exists "brew"; then
-        log_warn "Homebrew not found. Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || log_error "Failed to install Homebrew."
-        # Add Homebrew to PATH for current session
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    fi
-    log_info "Installing pipx via Homebrew..."
-    brew install pipx || log_error "Failed to install pipx via Homebrew."
-    # Ensure pipx path is in PATH for current session
-    pipx ensurepath || log_error "Failed to ensure pipx path."
-elif [ "$OS" == "windows" ]; then
+    brew install pipx
+    pipx ensurepath
+elif [ "$OS" == "windows" ]; then  
     if ! command_exists "scoop"; then
-        log_warn "Scoop not found. Installing Scoop..."
-        # This command needs to be run in PowerShell, not Git Bash.
-        # Providing instructions to the user.
-        log_info "Please open PowerShell as Administrator and run the following commands to install Scoop:"
+        log_info "Install Scoop first by running in PowerShell as Admin:"
         echo "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser"
         echo "irm get.scoop.sh | iex"
-        read -p "Press Enter to continue after you have installed Scoop..."
-        if ! command_exists "scoop"; then
-            log_error "Scoop still not found after user confirmation. Exiting."
-        fi
+        read -p "Press Enter after installing Scoop..."
     fi
-    log_info "Installing pipx via Scoop..."
-    scoop install pipx || log_error "Failed to install pipx via Scoop."
-    # Ensure pipx path is in PATH for current session
-    pipx ensurepath || log_error "Failed to ensure pipx path."
-else
-    log_error "pipx installation is not automated for your operating system ($OS). Please install pipx manually."
+    scoop install pipx
+    pipx ensurepath
 fi
 
-log_info "Installing virtualenv and poetry using pipx..."
-pipx install virtualenv || log_error "Failed to install virtualenv via pipx."
-pipx install poetry || log_error "Failed to install poetry via pipx."
-log_success "pipx, virtualenv, and poetry installed."
+pipx install virtualenv poetry
+log_success "Tools installed."
 
-# --- Setup virtualenv ---
-log_info "Step 2: Setting up virtualenv..."
+# Setup virtualenv
+log_info "Step 3: Creating virtual environment..."
+virtualenv --system-site-packages --python="$PYTHON_VERSION" "$VENV_PATH"
 
-# Check if the specified Python version is available
-if ! command_exists "$PYTHON_VERSION"; then
-    log_error "$PYTHON_VERSION not found. Please install Python 3.12 and ensure it's in your PATH."
-fi
-
-log_info "Creating virtual environment at $VENV_PATH with $PYTHON_VERSION..."
-virtualenv --system-site-packages --python="$PYTHON_VERSION" "$VENV_PATH" || log_error "Failed to create virtual environment."
-log_success "Virtual environment created at $VENV_PATH."
-
-# --- Install project dependencies with Poetry ---
-log_info "Step 3: Installing project dependencies with Poetry..."
-
-# Activate the virtual environment
-log_info "Activating virtual environment..."
+# Activate virtualenv
 if [ "$OS" == "windows" ]; then
-    # For Git Bash/Cygwin, source the activate script
-    source "$VENV_PATH/Scripts/activate" || log_error "Failed to activate virtual environment."
+    source "$VENV_PATH/Scripts/activate"
 else
-    source "$VENV_PATH/bin/activate" || log_error "Failed to activate virtual environment."
+    source "$VENV_PATH/bin/activate"
 fi
 
-if [ -z "$PACKAGE_DIR" ]; then
-    log_warn "PACKAGE_DIR is not set. Assuming the script is run from the project root."
-    log_info "Poetry will look for pyproject.toml in the current directory."
-    # If PACKAGE_DIR is empty, assume current directory is the project root
-    PROJECT_ROOT=$(pwd)
-else
-    log_info "Changing directory to project package: $PACKAGE_DIR"
-    if [ ! -d "$PACKAGE_DIR" ]; then
-        log_error "Project package directory '$PACKAGE_DIR' not found. Please set PACKAGE_DIR correctly or run the script from the project root."
-    fi
-    PROJECT_ROOT="$PACKAGE_DIR"
+log_success "Virtual environment created and activated."
+
+# Install project dependencies
+log_info "Step 4: Installing project dependencies..."
+
+PROJECT_ROOT=${PACKAGE_DIR:-$(pwd)}
+if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
+    log_error "pyproject.toml not found in $PROJECT_ROOT"
 fi
 
-# Change to the project directory and install dependencies
-log_info "Navigating to $PROJECT_ROOT and running 'poetry install'..."
-(cd "$PROJECT_ROOT" && poetry install) || log_error "Failed to install project dependencies with Poetry. Ensure 'pyproject.toml' is in '$PROJECT_ROOT'."
+(cd "$PROJECT_ROOT" && poetry install)
+log_success "Dependencies installed."
 
-log_success "Project dependencies installed successfully!"
-
-# --- Installing UHD ---
-log_info "Step 4: Installing UHD..."
+# Install UHD
+log_info "Step 5: Installing UHD..."
 
 if [ "$OS" == "windows" ]; then
-    log_warn "For Windows, UHD installation is typically a manual process due to GUI installers."
-    log_warn "Please download the latest stable UHD installer from Ettus Research and install it manually."
-    log_info "Opening the Ettus Research UHD downloads page in your browser..."
-    # Attempt to open the URL. 'start' for Windows, 'open' for macOS, 'xdg-open' for Linux.
+    log_warn "Manual UHD installation required for Windows."
+    log_info "Download from: $UHD_URL"
     if command_exists "start"; then
         start $UHD_URL
-    elif command_exists "open"; then
-        open $UHD_URL
-    elif command_exists "xdg-open"; then
-        xdg-open $UHD_URL
-    else
-        log_warn "Could not open browser automatically. Please visit https://www.ettus.com/support/downloads/uhd-images/ manually."
     fi
-    log_info "After installation, please ensure UHD drivers are correctly set up and recognized by your system."
-    read -p "Press Enter to continue after you have manually installed UHD..."
-    pip install uhd || log_error "Failed to pip install uhd. You may have to manually install uhd later"
+    read -p "Press Enter after installing UHD..."
+    pip install uhd
 elif [ "$OS" == "linux" ]; then
     if command_exists "apt"; then
-        log_info "Detected Debian/Ubuntu based system. Installing UHD via apt..."
-        sudo apt update || log_error "Failed to update apt packages."
-        sudo apt install -y libuhd-dev uhd-host python3-uhd || log_error "Failed to install UHD packages via apt."
+        sudo apt update
+        sudo apt install -y libuhd-dev uhd-host python3-uhd
     elif command_exists "dnf"; then
-        log_info "Detected Fedora/RHEL based system. Installing UHD via dnf..."
-        sudo dnf install -y uhd uhd-devel || log_error "Failed to install UHD packages via dnf."
-    else
-        log_error "Unsupported Linux distribution. Please install UHD manually."
+        sudo dnf install -y uhd uhd-devel
     fi
 elif [ "$OS" == "macos" ]; then
-    log_info "Detected macOS. Installing UHD via MacPorts..."
     if ! command_exists "port"; then
-        log_warn "MacPorts not found. Please install MacPorts first."
-        log_info "Instructions: https://www.macports.org/install.php"
-        read -p "Press Enter to continue after you have installed MacPorts..."
-        if ! command_exists "port"; then
-            log_error "MacPorts still not found after user confirmation. Exiting."
-        fi
+        log_warn "Install MacPorts from: https://www.macports.org/install.php"
+        read -p "Press Enter after installing MacPorts..."
     fi
-    sudo port selfupdate || log_error "Failed to update MacPorts."
-    sudo port install uhd uhd-devel || log_error "Failed to install UHD packages via MacPorts."
-else
-    log_error "UHD installation is not automated for your operating system ($OS). Please install UHD manually."
+    sudo port selfupdate
+    sudo port install uhd uhd-devel
 fi
-log_success "UHD installation step completed (or manual instructions provided)."
 
-# --- Final Instructions ---
-log_info "Installation complete!"
-log_info "To activate your virtual environment in the future, run:"
-if [ "$OS" == "windows" ]; then
-    echo "  source \"$VENV_PATH/Scripts/activate\""
-else
-    echo "  source \"$VENV_PATH/bin/activate\""
-fi
-log_info "Then navigate to your project directory (e.g., 'cd $PROJECT_ROOT') to run your project."
-log_info "You can deactivate the virtual environment by typing 'deactivate'."
+log_success "UHD installation completed."
+
+# Final instructions
+log_success "Installation complete!"
+log_info "To activate environment: source \"$VENV_PATH/$([ "$OS" == "windows" ] && echo "Scripts" || echo "bin")/activate\""
+log_info "Project directory: $PROJECT_ROOT"
