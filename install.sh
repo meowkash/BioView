@@ -90,9 +90,13 @@ if [ "$OS" == "linux" ]; then
         $PYTHON_VERSION -m pip install --user pipx
     fi
     $PYTHON_VERSION -m pipx ensurepath
+    # Refresh PATH for current session
+    export PATH="$HOME/.local/bin:$PATH"
 elif [ "$OS" == "macos" ]; then
     brew install pipx
     pipx ensurepath
+    # Refresh PATH for current session
+    export PATH="$HOME/.local/bin:$PATH"
 elif [ "$OS" == "windows" ]; then  
     if ! command_exists "scoop"; then
         log_info "Install Scoop first by running in PowerShell as Admin:"
@@ -102,14 +106,31 @@ elif [ "$OS" == "windows" ]; then
     fi
     scoop install pipx
     pipx ensurepath
+    # Refresh PATH for current session
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 
+# Install tools using pipx
 pipx install virtualenv poetry
+
+# Refresh PATH again to ensure virtualenv is available
+export PATH="$HOME/.local/bin:$PATH"
+
+# Verify virtualenv is available, fallback to direct pipx execution
+if ! command_exists "virtualenv"; then
+    VIRTUALENV_CMD="$HOME/.local/bin/virtualenv"
+    if [ ! -f "$VIRTUALENV_CMD" ]; then
+        log_error "virtualenv not found after installation. PATH may not be updated correctly."
+    fi
+else
+    VIRTUALENV_CMD="virtualenv"
+fi
+
 log_success "Tools installed."
 
 # Setup virtualenv
 log_info "Step 3: Creating virtual environment..."
-virtualenv --system-site-packages --python="$PYTHON_VERSION" "$VENV_PATH"
+$VIRTUALENV_CMD --system-site-packages --python="$PYTHON_VERSION" "$VENV_PATH"
 
 # Activate virtualenv
 if [ "$OS" == "windows" ]; then

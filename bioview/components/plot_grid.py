@@ -281,7 +281,6 @@ class PlotGrid(QWidget):
         return True
     
     def add_new_data(self, data): 
-        """Add new data to the appropriate channels"""
         for channel_idx in range(np.shape(data)[0]): 
             if channel_idx >= len(self.config.disp_channels):
                 break
@@ -295,13 +294,11 @@ class PlotGrid(QWidget):
             plot_obj.add_data(data[channel_idx, :])
 
     def update_plots(self):
-        """Update all active plots"""
         for val in self.selected_channels.values():
             plot_obj = val['plot']
             plot_obj.update_plot()
     
     def _monitor_queues(self):
-        """Monitor queue sizes for debugging lag issues"""
         total_queued = 0
         max_queue = 0
         

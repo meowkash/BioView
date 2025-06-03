@@ -161,7 +161,9 @@ class Viewer(QMainWindow):
         main_layout.addWidget(self.plot_grid)
         
         # Init plot grid
-        self.experiment_settings_panel._add_channels_to_grid()
+        for channel in self.exp_config.get_param('disp_channels', []):
+            self.handle_add_channel(channel)
+        
         central_widget.setLayout(main_layout)
         
         ### Status Bar 
@@ -422,7 +424,7 @@ class Viewer(QMainWindow):
             # Update config 
             sel_channels = self.exp_config.get_param('disp_channels')
             sel_channels.append(channel)
-            self.exp_config.set_param_value('disp_channels', sel_channels)
+            self.exp_config.set_param_value('disp_channels', list(set(sel_channels)))
             # Change state of UI 
             self.experiment_settings_panel.update_channel('add', channel)
     

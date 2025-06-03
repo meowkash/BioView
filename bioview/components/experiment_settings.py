@@ -3,10 +3,10 @@ from PyQt6.QtWidgets import (
     QGridLayout, QLabel, QGroupBox, QFileDialog, QSpinBox, QListView,
     QComboBox, QLineEdit, QPushButton, QHBoxLayout, QDoubleSpinBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QModelIndex
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 
-from bioview.types import ConnectionStatus, RunningStatus
+from bioview.types import ConnectionStatus, RunningStatus, ExperimentConfiguration
 from bioview.utils import get_qcolor
 
 class CheckableListView(QListView):
@@ -18,7 +18,7 @@ class CheckableListView(QListView):
         index = self.indexAt(event.pos())
         if index.isValid():
             item = self.model().itemFromIndex(index)
-            self.combo_box.toggle_item(item)  # Use shared method
+            self.combo_box.toggle_item(item) 
             self.viewport().update()
             self.combo_box.showPopup()
         else:
@@ -35,12 +35,9 @@ class CheckableComboBox(QComboBox):
         self.view().viewport().installEventFilter(self)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
-        self.lineEdit().setPlaceholderText("Select options...")
+        self.lineEdit().setPlaceholderText('Select options...')
         self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.clearEditText()
-
-        # Update line edit display when selection changes
-        self.selectionChanged.connect(self._update_line_edit_text)
 
     def addItem(self, text: str, checked=False):
         item = QStandardItem(text)
@@ -49,11 +46,10 @@ class CheckableComboBox(QComboBox):
                      Qt.ItemDataRole.CheckStateRole)
         self.model().appendRow(item)
         if checked:
-            self.selectionChanged.emit('add', text)  # Ensure lineEdit updates if added initially
+            self.selectionChanged.emit('add', text) 
 
     def toggle_item(self, item: QStandardItem):
         if item.checkState() == Qt.CheckState.Checked:
-            item.setCheckState(Qt.CheckState.Unchecked)
             self.selectionChanged.emit('remove', item.text())
         else:
             item.setCheckState(Qt.CheckState.Checked)
@@ -63,14 +59,16 @@ class CheckableComboBox(QComboBox):
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
             if item.text() == text and item.checkState() != Qt.CheckState.Checked:
-                self.toggle_item(item)
+                item.setCheckState(Qt.CheckState.Checked)
+                self.update_line_text()
                 break
 
     def unselect_channel(self, text: str):
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
             if item.text() == text and item.checkState() != Qt.CheckState.Unchecked:
-                self.toggle_item(item)
+                item.setCheckState(Qt.CheckState.Unchecked)
+                self.update_line_text()
                 break
 
     def checkedItems(self):
@@ -80,10 +78,10 @@ class CheckableComboBox(QComboBox):
             if self.model().item(i).checkState() == Qt.CheckState.Checked
         ]
 
-    def _update_line_edit_text(self, *_):
+    def update_line_text(self):
         checked = self.checkedItems()
         self.lineEdit().setText(", ".join(checked) if checked else "")
-
+        
     def eventFilter(self, source, event):
         if event.type() == QEvent.Type.MouseButtonPress:
             index = self.view().indexAt(event.pos())
@@ -100,7 +98,7 @@ class ExperimentSettingsPanel(QGroupBox):
     removeChannelRequested = pyqtSignal(str)
 
     def __init__(self, 
-                 config,  
+                 config: ExperimentConfiguration,  
                  parent=None
         ):
         super().__init__('Experiment Settings', parent)
@@ -206,12 +204,12 @@ class ExperimentSettingsPanel(QGroupBox):
         row += 1
         
         # Channel selection
-        layout.addWidget(QLabel("Plot Sources"), row, 0)
+        layout.addWidget(QLabel('Plot Sources'), row, 0)
         self.channel_combo = CheckableComboBox()
         for x in self.config.data_mapping.keys():
             self.channel_combo.addItem(str(x))
         self.channel_combo.selectionChanged.connect(self.request_channel_update) 
-        
+            
         layout.addWidget(self.channel_combo, row, 1)
         
         self.setLayout(layout)
@@ -224,16 +222,6 @@ class ExperimentSettingsPanel(QGroupBox):
         if event.type() == QEvent.Type.ApplicationPaletteChange: 
             self._update_icons()
         return super().event(event)
-       
-    def _add_channels_to_grid(self):
-        # Init grid 
-        disp_channels = getattr(self.config, 'disp_channels', [])
-        
-        for r in range(self.rows_input.value()): 
-            for c in range(self.cols_input.value()): 
-                idx = r * self.cols_input.value() + c
-                if idx < len(disp_channels): 
-                    self.channel_combo.select_channel(disp_channels[idx])
      
     def update_display_time(self):
         self.timeWindowChanged.emit(self.time_input.value())
@@ -252,9 +240,10 @@ class ExperimentSettingsPanel(QGroupBox):
     def update_channel(self, action, source):
         if action == 'add':
             self.channel_combo.select_channel(source)
-        else:
-            self.channel_combo.unselect_channel(source)
-        
+        elif action == 'remove':
+            self.channel_combo.unselect_channel(source)  
+        else: 
+            return None
     
     def openFolderDialog(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
