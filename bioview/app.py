@@ -255,6 +255,7 @@ class Viewer(QMainWindow):
             
             dev_name = self.usrp_config[idx].device_name
             self.device_status_panel.update_device_state(device_name=dev_name, new_state=ConnectionStatus.CONNECTING)
+            time.sleep(0.05)
             self.usrp_init_thread[idx].start()
             self.usrp_init_thread[idx].wait()
 

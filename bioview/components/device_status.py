@@ -1,14 +1,14 @@
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel
-from PyQt6.QtCore import QTimer, QEvent
+from PyQt6.QtCore import QTimer, QEvent, QMutex
 from PyQt6.QtGui import QPainter, QColor, QPen
 
 from bioview.types import ConnectionStatus
 
 class LEDIndicator(QWidget):
     ''' Indicate device status using the following codes - 
-    Connected: Solid Green , 
-    Connecting: Blinking Yellow, 
-    Disconnected: Solid Red
+    Connected: Green , 
+    Connecting: Yellow, 
+    Disconnected: Red
     '''
     def __init__(self, 
                  state=ConnectionStatus.DISCONNECTED, 
@@ -17,39 +17,20 @@ class LEDIndicator(QWidget):
         super().__init__()
         self.state = state
         self.size = size
-        self.blink_visible = False
         self.setFixedSize(size, size)
-        
-        # Timer for blinking effect
-        self.blink_timer = QTimer()
-        self.blink_timer.timeout.connect(self.toggle_blink)
         
         self.update_state(state)
     
     def update_state(self, state):
-        self.state = state
-        
-        if state == ConnectionStatus.CONNECTING:
-            self.blink_timer.start(100) 
-        else:
-            self.blink_timer.stop()
-            self.blink_visible = True
-        
-        self.update()
-    
-    def toggle_blink(self):
-        self.blink_visible = not self.blink_visible
-        self.update()
+        self.state = state    
+        self.repaint() 
     
     def paintEvent(self, event):
         # Draw the LED circle with appropriate color
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     
-        if self.state == ConnectionStatus.CONNECTING and not self.blink_visible: 
-            color = QColor(100, 100, 0) 
-        else: 
-            color = self.state.value[1]
+        color = self.state.value[1]
         
         painter.setBrush(color)
         painter.setPen(QPen(QColor(50, 50, 50), 1))
@@ -57,6 +38,11 @@ class LEDIndicator(QWidget):
         margin = 1
         painter.drawEllipse(margin, margin, self.size - 2*margin, self.size - 2*margin)
         
+    def __del__(self):
+        # Ensure timer is stopped when object is destroyed
+        if hasattr(self, 'blink_timer') and self.blink_timer.isActive():
+            self.blink_timer.stop()
+            
 class DeviceStatusWidget(QWidget):
     def __init__(self, 
                  device_name, 
@@ -95,6 +81,8 @@ class DeviceStatusPanel(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(15)
         
+        self.mutex = QMutex() 
+        
         # Add device widgets
         for device_name, device_state in self.devices.items():
             self.add_device(device_name, device_state)
@@ -121,7 +109,7 @@ class DeviceStatusPanel(QWidget):
         self.devices[device_name] = device_state
     
     def update_device_state(self, device_name, new_state):
-        if device_name in self.device_widgets:
+        if device_name in self.device_widgets.keys():
             self.device_widgets[device_name].update_state(new_state)
             self.devices[device_name] = new_state
     
