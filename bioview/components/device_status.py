@@ -17,7 +17,6 @@ class LEDIndicator(QWidget):
         super().__init__()
         self.state = state
         self.size = size
-        self.blink_visible = True
         self.setFixedSize(size, size)
         
         self.update_state(state)
@@ -25,18 +24,6 @@ class LEDIndicator(QWidget):
     def update_state(self, state):
         self.state = state    
         self.repaint() 
-        self.state = state
-        
-        if state == ConnectionStatus.CONNECTING:
-            self.blink_timer.start(100) 
-        else:
-            self.blink_timer.stop()
-            
-        self.repaint() 
-    
-    def toggle_blink(self):
-        self.blink_visible = not self.blink_visible
-        self.repaint()
     
     def paintEvent(self, event):
         # Draw the LED circle with appropriate color
@@ -44,25 +31,13 @@ class LEDIndicator(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     
         color = self.state.value[1]
-        if self.state == ConnectionStatus.CONNECTING:
-            if self.blink_visible: 
-                color = self.state.value[1] 
-            else: 
-                color = QColor(100, 100, 0)
-        else: 
-            color = self.state.value[1]
         
         painter.setBrush(color)
         painter.setPen(QPen(QColor(50, 50, 50), 1))
         
         margin = 1
         painter.drawEllipse(margin, margin, self.size - 2*margin, self.size - 2*margin)
-        
-    def __del__(self):
-        # Ensure timer is stopped when object is destroyed
-        if hasattr(self, 'blink_timer') and self.blink_timer.isActive():
-            self.blink_timer.stop()
-            
+         
 class DeviceStatusWidget(QWidget):
     def __init__(self, 
                  device_name, 
