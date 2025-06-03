@@ -31,13 +31,13 @@ class UsrpDeviceConfigPanel(QGroupBox):
                 'disp_str': 'RX Gain (dB)', 
                 'range': (0, 70), 
                 'multiplier': 1,
-                'step': 0.1
+                'step': 1
             },
             'tx_amplitude': {
                 'disp_str': 'IF Amplitude', 
                 'range': (0, 1), 
                 'multiplier': 1,
-                'step': 0.01
+                'step': 0.1
             },
             'if_freq': {
                 'disp_str': 'IF Frequency (kHz)', 
@@ -49,7 +49,7 @@ class UsrpDeviceConfigPanel(QGroupBox):
                 'disp_str': 'Sample Rate (MSps)', 
                 'range': (0.1, 10), 
                 'multiplier': 1e6, # MSps to sps
-                'step': 0.05
+                'step': 0.1
             },
             'carrier_freq': {
                 'disp_str': 'Carrier Freq. (MHz)', 

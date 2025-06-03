@@ -7,13 +7,13 @@ from bioview.utils import get_qcolor
 
 class AppControlPanel(QGroupBox):
     # Define signals to emit changes to connection status
-    # This is left verbose for cleaner debugging
     connectionInitiated = pyqtSignal()
     startRequested = pyqtSignal()
     stopRequested = pyqtSignal() 
     saveRequested = pyqtSignal(bool)
     instructionsEnabled = pyqtSignal(bool)
     balanceRequested = pyqtSignal()
+    sweepRequested = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__('Control', parent)
@@ -56,18 +56,23 @@ class AppControlPanel(QGroupBox):
         self.stop_button.clicked.connect(self.on_stop_clicked)
         layout.addWidget(self.stop_button)
         
-        # Balance Signal Checkbox
-        self.balance_signal_button = QPushButton('   Balance Signal')
-        self.balance_signal_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
-        self.balance_signal_button.setStyleSheet(f'padding: {padlen}px;')
-        self.balance_signal_button.setEnabled(False)
-        self.balance_signal_button.clicked.connect(self.on_balance_clicked)
-        layout.addWidget(self.balance_signal_button)
+        # Gain Balance Button
+        self.gain_balance_button = QPushButton('   Gain Balance')
+        self.gain_balance_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
+        self.gain_balance_button.setStyleSheet(f'padding: {padlen}px;')
+        self.gain_balance_button.setEnabled(False)
+        self.gain_balance_button.clicked.connect(self.on_gain_balance_clicked)
+        layout.addWidget(self.gain_balance_button)
         
-        # Routine selection - This will be experiment specific now
+        # Frequency Sweep Button
+        self.freq_sweep_button = QPushButton('   Frequency Sweep')
+        self.freq_sweep_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
+        self.freq_sweep_button.setStyleSheet(f'padding: {padlen}px;')
+        self.freq_sweep_button.setEnabled(False)
+        self.freq_sweep_button.clicked.connect(self.on_freq_sweep_clicked)
+        layout.addWidget(self.freq_sweep_button)
         
         layout.addStretch()
-        
         self.setLayout(layout)
     
     # Handle theme changes 
@@ -75,7 +80,7 @@ class AppControlPanel(QGroupBox):
         self.connect_button.setIcon(qta.icon('fa6s.house', color=get_qcolor('purple')))
         self.start_button.setIcon(qta.icon('fa6s.play', color=get_qcolor('green')))
         self.stop_button.setIcon(qta.icon('fa6s.stop', color=get_qcolor('red')))
-        self.balance_signal_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
+        self.gain_balance_button.setIcon(qta.icon('fa6s.rotate', color=get_qcolor('blue')))
         
     def event(self, event): 
         if event.type() == QEvent.Type.ApplicationPaletteChange: 
@@ -88,13 +93,13 @@ class AppControlPanel(QGroupBox):
             self.stop_button.setEnabled(running_status == RunningStatus.RUNNING)
             self.save_checkbox.setEnabled(running_status == RunningStatus.STOPPED)
             self.connect_button.setEnabled(False)
-            self.balance_signal_button.setEnabled(True) 
+            self.gain_balance_button.setEnabled(True) 
         elif connection_status == ConnectionStatus.DISCONNECTED: 
             self.connect_button.setEnabled(True)
             self.start_button.setEnabled(False)
             self.save_checkbox.setEnabled(True)
             self.stop_button.setEnabled(False)
-            self.balance_signal_button.setEnabled(False)
+            self.gain_balance_button.setEnabled(False)
         elif connection_status == ConnectionStatus.CONNECTING: 
             self.connect_button.setEnabled(False)
             self.start_button.setEnabled(False)
@@ -109,9 +114,12 @@ class AppControlPanel(QGroupBox):
     def on_stop_clicked(self):
         self.stopRequested.emit()
     
-    def on_balance_clicked(self):
+    def on_gain_balance_clicked(self):
         self.balanceRequested.emit()
-        
+       
+    def on_freq_sweep_clicked(self):
+        self.sweepRequested.emit()
+     
     def on_save_toggled(self): 
         if self.save_checkbox.isChecked(): 
             self.saveRequested.emit(True)

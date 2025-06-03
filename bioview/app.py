@@ -120,7 +120,8 @@ class Viewer(QMainWindow):
         self.app_control_panel.stopRequested.connect(self.stop_recording)
         self.app_control_panel.saveRequested.connect(self.update_save_state)
         self.app_control_panel.instructionsEnabled.connect(self.toggle_instructions)
-        self.app_control_panel.balanceRequested.connect(self.balance_signals)
+        self.app_control_panel.balanceRequested.connect(self.perform_gain_balancing)
+        self.app_control_panel.sweepRequested.connect(self.perform_frequency_sweep)
         
         experiment_layout = QHBoxLayout()
         
@@ -373,10 +374,13 @@ class Viewer(QMainWindow):
         # Update UI 
         self.update_buttons()
      
-    def balance_signals(self):
+    def perform_gain_balancing(self):
         # TODO: Implement signal balancing here 
         pass 
       
+    def perform_frequency_sweep(self): 
+        pass 
+    
     def update_buttons(self): 
         self.app_control_panel.update_button_states(self.connection_status, self.running_status)
         self.experiment_settings_panel.update_button_states(self.connection_status, self.running_status)
