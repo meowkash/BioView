@@ -30,7 +30,7 @@ class ReceiveWorker(QThread):
             
             while self.running:                     
                 # Get recent sample and add to queue
-                if wrap_result_code(self.mpdev.getMostRecentSample(byref(data_buffer))): 
+                if wrap_result_code(self.biopac.getMostRecentSample(byref(data_buffer))): 
                     sample = [data_buffer[i] for i in range(num_channels + 1)]
                     self.bio_queue.put(sample)
                 

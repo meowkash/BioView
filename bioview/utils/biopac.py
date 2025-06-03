@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 
 from bioview.constants import BIOPAC_CONNECTION_CODES
+from .caches import get_mpdev_path, update_mpdev_path
 
-def load_mpdev_dll(custom_loc: str = None): 
+def load_mpdev_dll(custom_loc: str = None):  
     dll = None
     try: 
         dll = ctypes.CDLL('mpdev.dll')
@@ -19,13 +20,18 @@ def load_mpdev_dll(custom_loc: str = None):
             dll = ctypes.CDLL(loc)
             return dll     
     
-    # Check root diretory
-    sys_dir = Path(os.path.abspath(os.sep)) 
-    dll_locs = sys_dir.glob('Program Files*/BIOPAC*/**/x64/mpdev.dll')
-    
-    for loc in dll_locs:
-        dll = ctypes.CDLL(loc)
-        return dll 
+    # Check root diretory - Check cache before searching
+    dll_path = get_mpdev_path()
+    if dll_path is not None: 
+        return ctypes.CDLL(dll_path)
+    else: 
+        sys_dir = Path(os.path.abspath(os.sep)) 
+        dll_locs = sys_dir.glob('Program Files*/BIOPAC*/**/x64/mpdev.dll')
+        
+        for loc in dll_locs:
+            update_mpdev_path(loc)
+            dll = ctypes.CDLL(loc)
+            return dll 
 
     return None 
 

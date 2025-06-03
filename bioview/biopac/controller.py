@@ -3,7 +3,6 @@ from ctypes import c_int, c_double, byref
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.utils import load_mpdev_dll, wrap_result_code
-from bioview.constants import BIOPAC_CONNECTION_CODES
 
 class Controller(QThread):
     initSucceeded = pyqtSignal(object)
@@ -18,7 +17,7 @@ class Controller(QThread):
     def run(self): 
         # Load the DLL
         self.biopac = load_mpdev_dll(self.config.mpdev_path)
-        if self.mpdev is None: 
+        if self.biopac is None: 
             self.logEvent.emit('mpdev.dll was not found. Ensure it is available in either the system path or the custom path provided')
             return 
         
@@ -33,7 +32,7 @@ class Controller(QThread):
             wrap_result_code(self.biopac.setAcqChannels(byref(channels_array)), 'Set Channels')
         
             # Set sample rate 
-            wrap_result_code(self.mpdev.setSampleRate(c_double(self.config.get_sample_time())), 'Set Sample Rate')
+            wrap_result_code(self.biopac.setSampleRate(c_double(self.config.get_samp_time())), 'Set Sample Rate')
             
             # Emit device to main app
             self.initSucceeded.emit(self.biopac)

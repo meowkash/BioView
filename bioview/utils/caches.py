@@ -9,7 +9,37 @@ def _get_cache_file(file_name):
         cache_file.touch()
     
     return cache_file
+
+def get_mpdev_path(): 
+    cache_file = _get_cache_file('mpdev_path')
     
+    try: 
+        with open(cache_file, 'r') as fobj: 
+            dll_path = json.load(fobj)
+    except Exception as e:
+        print('mpdev path is not cached')
+        return None
+        
+    return dll_path
+
+def update_mpdev_path(dll_path): 
+    cache_file = _get_cache_file('mpdev_path')
+    
+    try: 
+        with open(cache_file, 'r') as fobj: 
+            dll_path = json.load(fobj)
+    except Exception as e:
+        print('mpdev path is not cached currently. Storing in cache.')
+    
+    # Update 
+    try: 
+        with open(cache_file, 'w') as fobj: 
+            json.dump(dll_path, fobj)
+    except Exception as e:
+        print(f'Error updating cache: {e}')
+    finally:
+        print('Successfully stored in cache')
+        
 def get_usrp_address(device_name: str): 
     cache_file = _get_cache_file('serial_maps')
     map_dict = {}

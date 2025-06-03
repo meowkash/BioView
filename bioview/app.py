@@ -12,9 +12,9 @@ from PyQt6.QtCore import QMutex
 
 from bioview.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel, TextDialog
 from bioview.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
-from bioview.usrp import UsrpController, UsrpReceiver, UsrpTransmitter
-from bioview.common import SaveWorker, DisplayWorker, InstructionsWorker
-from bioview.biopac import BiopacController
+from bioview.usrp import UsrpController, UsrpReceiver, UsrpTransmitter, UsrpProcessor
+from bioview.common import Displayer, Instructor, Saver
+from bioview.biopac import BiopacController, BiopacReceiver, BiopacProcessor
 from bioview.utils import get_channel_map
     
 class Viewer(QMainWindow):
@@ -84,6 +84,7 @@ class Viewer(QMainWindow):
         
         ### Data Queues
         self.rx_queues = [queue.Queue() for _ in range(len(self.usrp_config))]
+        self.bio_queue = queue.Queue()
         self.disp_queue = queue.Queue(maxsize=10000)
         
         ### Make Connections 
@@ -223,8 +224,8 @@ class Viewer(QMainWindow):
             return 
         
         ### Generate Biopac channel labels:data queue index mapping
-        for ch in self.bio_config.channels: 
-            label = f'{self.bio_config.device_name}_Ch{ch}'
+        for idx, _ in enumerate(self.bio_config.channels): 
+            label = f'{self.bio_config.device_name}_Ch{idx+1}'
             self.exp_config.data_mapping[label] = self.source_counter
             self.source_counter += 1
              
@@ -274,7 +275,7 @@ class Viewer(QMainWindow):
         self.running_status = RunningStatus.RUNNING
         self.connection_status = ConnectionStatus.CONNECTED
         
-        # Start streaming threads
+        # Create USRP streaming threads
         for idx, cfg in enumerate(self.usrp_config):
             self.usrp_tx_thread[idx] = UsrpTransmitter(
                 config = cfg, 
@@ -282,9 +283,8 @@ class Viewer(QMainWindow):
                 tx_streamer = self.tx_streamers[idx]
             )
             self.usrp_tx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
-            self.usrp_tx_thread[idx].start()
          
-        # Start receiving threads
+        # Create USRP receiving threads
         for idx, cfg in enumerate(self.usrp_config):
             self.usrp_rx_thread[idx] = UsrpReceiver(
                 usrp = self.usrps[idx], 
@@ -294,20 +294,18 @@ class Viewer(QMainWindow):
                 running = self.running_status.value
             )
             self.usrp_rx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
-            self.usrp_rx_thread[idx].start()
         
-        # Start display thread 
-        self.display_thread = DisplayWorker(
-            config = self.exp_config, 
-            disp_queue = self.disp_queue, 
-            running = self.running_status.value
-        )
-        self.display_thread.logEvent.connect(self.log_display_panel.log_message)
-        self.display_thread.dataReady.connect(self.plot_grid.add_new_data)        
-        self.display_thread.start()
-        
-        # Start saving thread 
-        self.save_thread = SaveWorker(
+        # Create BIOPAC receiving threads 
+        if self.bio_config is not None: 
+            self.bio_rx_thread = BiopacReceiver(
+                biopac = self.biopac,
+                config = self.bio_config,
+                bio_queue = self.bio_queue
+            )
+            self.bio_rx_thread.logEvent.connect(self.log_display_panel.log_message)
+            
+        # Create saving thread 
+        self.save_thread = UsrpProcessor(
             exp_config = self.exp_config, 
             usrp_config = self.usrp_config,
             rx_queues = self.rx_queues, 
@@ -316,17 +314,31 @@ class Viewer(QMainWindow):
             saving = self.saving_status
         )
         self.save_thread.logEvent.connect(self.log_display_panel.log_message)
-        self.save_thread.start()
         
-        # Start instructions
+        # Create display thread 
+        self.display_thread = Displayer(
+            config = self.exp_config, 
+            disp_queue = self.disp_queue, 
+            running = self.running_status.value
+        )
+        self.display_thread.logEvent.connect(self.log_display_panel.log_message)
+        self.display_thread.dataReady.connect(self.plot_grid.add_new_data)        
+        
+        # Create instruction thread
         if self.enable_instructions:
-            self.instructions_thread = InstructionsWorker(config = self.exp_config)
+            self.instructions_thread = Instructor(config = self.exp_config)
             self.instructions_thread.textUpdate.connect(self.instruction_dialog.update_instruction_text)
             self.instructions_thread.logEvent.connect(self.log_display_panel.log_message)
             self.instructions_thread.start()
             
         # Start all threads together 
-        
+        for thread in self.usrp_tx_thread:
+            thread.start()
+        for thread in self.usrp_rx_thread:
+            thread.start()
+        self.bio_rx_thread.start()
+        self.save_thread.start()
+        self.display_thread.start()
         
         # Update UI 
         self.update_buttons()

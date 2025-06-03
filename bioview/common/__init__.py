@@ -1,3 +1,3 @@
-from .displayer import DisplayWorker
-from .instructions import InstructionsWorker
-from .saver import SaveWorker
+from .displayer import DisplayWorker as Displayer
+from .instructions import InstructionsWorker as Instructor
+from .saver import SaveWorker as Saver
