@@ -41,7 +41,7 @@ import sys
 import faulthandler
 
 from bioview.app import Viewer
-from bioview.types import UsrpConfiguration, ExperimentConfiguration
+from bioview.types import UsrpConfiguration, ExperimentConfiguration, BiopacConfiguration
 
 from PyQt6.QtWidgets import QApplication
 

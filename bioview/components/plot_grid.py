@@ -170,7 +170,7 @@ class PlotGrid(QWidget):
         self.layout.setSpacing(5)    
         
         # Keep track of available plots that are not connected to an output 
-        self.available_slots = queue.Queue() 
+        self.available_slots = []
         
         # Optimize refresh rate and ensure real-time performance
         self.refresh_time = max(self._get_monitor_refresh_delay(), 10)  # Max 60 FPS
@@ -218,7 +218,7 @@ class PlotGrid(QWidget):
                 self.plots[r][c] = plot_obj
                 
                 # Initially, all slots are available 
-                self.available_slots.put((r, c))
+                self.available_slots.append((r, c))
     
     def update_grid(self, rows, cols):
         # Clear past grid 
@@ -233,11 +233,7 @@ class PlotGrid(QWidget):
         self.selected_channels = {} 
         
         # Flush queue of available slots 
-        while not self.available_slots.empty():
-            try:
-                self.available_slots.get_nowait()
-            except queue.Empty:
-                break
+        self.available_slots = []
         
         self.init_grid()
     
@@ -247,8 +243,11 @@ class PlotGrid(QWidget):
             return True
     
         try: 
-            row, col = self.available_slots.get_nowait()
-        except queue.Empty:
+            # Sort
+            self.available_slots.sort(key=lambda x: x[0] * self.cols + x[1])
+            # Pop
+            row, col = self.available_slots.pop(0)
+        except IndexError:
             self.logEvent.emit('warning', 'All graph slots full. Update layout or remove an existing trace.')
             return False 
         
@@ -276,7 +275,7 @@ class PlotGrid(QWidget):
         
         # Remove from data structures
         self.selected_channels.pop(channel, None)
-        self.available_slots.put(tuple(loc))
+        self.available_slots.append(tuple(loc))
         
         return True
     

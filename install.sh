@@ -176,7 +176,7 @@ elif [ "$OS" == "macos" ]; then
         read -p "Press Enter after installing MacPorts..."
     fi
     sudo port selfupdate
-    sudo port install uhd uhd-devel
+    sudo port install uhd
 fi
 
 log_success "UHD installation completed."
