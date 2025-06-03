@@ -418,10 +418,22 @@ class Viewer(QMainWindow):
         self.plot_grid.update_grid(rows, cols)
     
     def handle_add_channel(self, channel):
-        self.plot_grid.add_channel(channel)
+        if self.plot_grid.add_channel(channel):
+            # Update config 
+            sel_channels = self.exp_config.get_param('disp_channels')
+            sel_channels.append(channel)
+            self.exp_config.set_param_value('disp_channels', sel_channels)
+            # Change state of UI 
+            self.experiment_settings_panel.update_channel('add', channel)
     
     def handle_remove_channel(self, channel):
-        self.plot_grid.remove_channel(channel)
+        if self.plot_grid.remove_channel(channel):
+            # Update config 
+            sel_channels = self.exp_config.get_param('disp_channels')
+            sel_channels.remove(channel)
+            self.exp_config.set_param_value('disp_channels', sel_channels)
+            # Change state of UI 
+            self.experiment_settings_panel.update_channel('remove', channel)
     
     def update_save_state(self, flag): 
         self.saving_status = flag

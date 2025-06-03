@@ -210,7 +210,7 @@ class ExperimentSettingsPanel(QGroupBox):
         self.channel_combo = CheckableComboBox()
         for x in self.config.data_mapping.keys():
             self.channel_combo.addItem(str(x))
-        self.channel_combo.selectionChanged.connect(self.update_channel) 
+        self.channel_combo.selectionChanged.connect(self.request_channel_update) 
         
         layout.addWidget(self.channel_combo, row, 1)
         
@@ -241,13 +241,20 @@ class ExperimentSettingsPanel(QGroupBox):
     def update_grid(self):
         self.gridLayoutChanged.emit(self.rows_input.value(), self.cols_input.value())
     
-    def update_channel(self, action, source): 
+    def request_channel_update(self, action, source): 
         if action == 'remove':
             self.removeChannelRequested.emit(source)
         elif action == 'add':
             self.addChannelRequested.emit(source)
         else:
             return 
+        
+    def update_channel(self, action, source):
+        if action == 'add':
+            self.channel_combo.select_channel(source)
+        else:
+            self.channel_combo.unselect_channel(source)
+        
     
     def openFolderDialog(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")

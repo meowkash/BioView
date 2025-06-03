@@ -23,11 +23,14 @@ class PlotManager():
         self.widget = pg.PlotWidget()
         self.widget.setAntialiasing(False)
         self.widget.getPlotItem().setDownsampling(auto=True, mode='subsample')
+        self.widget.enableAutoRange(pg.ViewBox.YAxis, enable=True)  
+        self.widget.enableAutoRange(pg.ViewBox.XAxis, enable=False)
+        self.widget.setMouseEnabled(x=False, y=False)
         self.widget.setBackground(None) 
         self.widget.showGrid(x=True, y=True)
         self.widget.setLabel('bottom', xlabel)
         self.widget.setLabel('left', ylabel)
-                
+        
         # Create pen and plot item ONCE - this is key for performance
         self.pen = pg.mkPen(color=color, width=1)
         self.plot_item = self.widget.plot([], [], pen=self.pen)
@@ -56,6 +59,9 @@ class PlotManager():
         
         # Set initial data on the plot item (don't create new plot)
         self.plot_item.setData(self.time_vector, list(self.buffer))
+        
+        # Set ranges correctly
+        self.widget.setXRange(0, self.display_duration, padding=0)
         
     def update_data_source(self, data_src: str = ''): 
         self.widget.setTitle(data_src)
@@ -238,13 +244,13 @@ class PlotGrid(QWidget):
     def add_channel(self, channel):
         if channel in self.selected_channels.keys():
             self.logEvent.emit('debug', 'Unable to add channel as it is already being plotted')
-            return
+            return True
     
         try: 
             row, col = self.available_slots.get_nowait()
         except queue.Empty:
             self.logEvent.emit('warning', 'All graph slots full. Update layout or remove an existing trace.')
-            return  
+            return False 
         
         plot_obj = self.plots[row][col]
         plot_obj.update_data_source(channel)
@@ -254,6 +260,8 @@ class PlotGrid(QWidget):
             'plot': plot_obj,
             'loc': (row, col)
         }
+        
+        return True
     
     def remove_channel(self, channel):
         if channel not in self.selected_channels.keys():
@@ -269,6 +277,8 @@ class PlotGrid(QWidget):
         # Remove from data structures
         self.selected_channels.pop(channel, None)
         self.available_slots.put(tuple(loc))
+        
+        return True
     
     def add_new_data(self, data): 
         """Add new data to the appropriate channels"""
