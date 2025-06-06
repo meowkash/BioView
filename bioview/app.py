@@ -83,9 +83,11 @@ class Viewer(QMainWindow):
         self.instructions_thread = None
         
         ### Data Queues
-        self.rx_queues = [queue.Queue() for _ in range(len(self.usrp_config))]
-        self.bio_queue = queue.Queue()
-        self.disp_queue = queue.Queue(maxsize=10000)
+        self.usrp_rx_queue = [queue.Queue() for _ in range(len(self.usrp_config))]
+        self.usrp_disp_queue = queue.Queue(maxsize=10000)
+        
+        self.bio_rx_queue = queue.Queue()
+        self.bio_disp_queue = queue.Queue()
         
         ### Make Connections 
         self._connect_logging()
@@ -291,7 +293,7 @@ class Viewer(QMainWindow):
                 usrp = self.usrps[idx], 
                 config = cfg, 
                 rx_streamer = self.rx_streamers[idx], 
-                rx_queue = self.rx_queues[idx],
+                rx_queue = self.usrp_rx_queue[idx],
                 running = self.running_status.value
             )
             self.usrp_rx_thread[idx].logEvent.connect(self.log_display_panel.log_message)
@@ -301,7 +303,7 @@ class Viewer(QMainWindow):
             self.bio_rx_thread = BiopacReceiver(
                 biopac = self.biopac,
                 config = self.bio_config,
-                bio_queue = self.bio_queue
+                rx_queue = self.bio_rx_queue
             )
             self.bio_rx_thread.logEvent.connect(self.log_display_panel.log_message)
             
@@ -309,17 +311,22 @@ class Viewer(QMainWindow):
         self.save_thread = UsrpProcessor(
             exp_config = self.exp_config, 
             usrp_config = self.usrp_config,
-            rx_queues = self.rx_queues, 
-            disp_queue = self.disp_queue, 
+            rx_queues = self.usrp_rx_queue, 
+            disp_queue = self.usrp_disp_queue, 
             running = self.running_status.value, 
             saving = self.saving_status
         )
         self.save_thread.logEvent.connect(self.log_display_panel.log_message)
         
+        
+        # disp_queues = {
+        #         'usrp': self.usrp_disp_queue,
+        #         'biopac': self.bio_disp_queue
+        #     }, 
         # Create display thread 
         self.display_thread = Displayer(
             config = self.exp_config, 
-            disp_queue = self.disp_queue, 
+            disp_queue=self.usrp_disp_queue,
             running = self.running_status.value
         )
         self.display_thread.logEvent.connect(self.log_display_panel.log_message)
@@ -328,7 +335,8 @@ class Viewer(QMainWindow):
         # Create instruction thread
         if self.enable_instructions:
             self.instructions_thread = Instructor(config = self.exp_config)
-            self.instructions_thread.textUpdate.connect(self.instruction_dialog.update_instruction_text)
+            if self.instruction_dialog is not None: 
+                self.instructions_thread.textUpdate.connect(self.instruction_dialog.update_instruction_text)
             self.instructions_thread.logEvent.connect(self.log_display_panel.log_message)
             self.instructions_thread.start()
             

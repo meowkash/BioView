@@ -1,3 +1,4 @@
+import queue
 from ctypes import byref, c_double
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -11,14 +12,14 @@ class ReceiveWorker(QThread):
     def __init__(self, 
                  biopac,
                  config: BiopacConfiguration,  
-                 bio_queue, 
+                 rx_queue: queue.Queue, 
                  running:bool = True,
                  parent = None
         ):
         super().__init__(parent)
         self.config = config 
         self.biopac = biopac 
-        self.bio_queue = bio_queue
+        self.rx_queue = rx_queue
         self.running = running
     
     def run(self): 
@@ -32,7 +33,7 @@ class ReceiveWorker(QThread):
                 # Get recent sample and add to queue
                 if wrap_result_code(self.biopac.getMostRecentSample(byref(data_buffer))): 
                     sample = [data_buffer[i] for i in range(num_channels + 1)]
-                    self.bio_queue.put(sample)
+                    self.rx_queue.put(sample)
                 
         except Exception as e: 
             self.logEvent.emit('error', e)

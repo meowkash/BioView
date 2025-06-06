@@ -42,8 +42,7 @@ class ProcessWorker(QThread):
             num_channels = len(exp_config.data_mapping)
         if self.saving:
             init_save_file(file_path = self.out_file, 
-                           num_channels = num_channels, 
-                           chunk_size=500)
+                           num_channels = num_channels)
         
         # Initialize states for all valid declared channel combinations
         self.phase_accumulator = {}
@@ -162,34 +161,32 @@ class ProcessWorker(QThread):
                     samples[idx] = rx_q.get()
                 data_buf = np.transpose(np.vstack(samples))
                 
-                self.logEvent.emit('debug', f'Buffer size: {len(data_buf)} with elem shape {data_buf[0].shape}')
                 buffer_data = np.transpose(np.vstack(data_buf))
                 processed = self._process(buffer_data) 
-                self.logEvent.emit('debug', f'Processed data shape {processed.shape}')   
                 
                 # Add to display queue 
                 try: 
                     self.disp_queue.put(processed)
                 except queue.Empty: 
-                    self.logEvent.emit('debug', 'Display Queue Empty')    
+                    self.logEvent.emit('debug', '[USRP] Display Queue Empty')    
                 except queue.Full: 
-                    self.logEvent.emit('debug', 'Display Queue Full')
+                    self.logEvent.emit('debug', '[USRP] Display Queue Full')
                 
                 # Write to file, only if saving 
                 if self.saving:
                     update_save_file(self.out_file, processed)
                 
             except queue.Empty:
-                self.logEvent.emit('debug', 'Rx Queue Empty')
+                self.logEvent.emit('debug', '[USRP] Rx Queue Empty')
                 continue
             except queue.Full: 
-                self.logEvent.emit('debug', 'Rx Queue Full')
+                self.logEvent.emit('debug', '[USRP] Rx Queue Full')
                 continue
             except Exception as e:
-                self.logEvent.emit('error', f'Saving error: {e}')
+                self.logEvent.emit('error', f'[USRP] Saving error: {e}')
                 continue
                 
-        self.logEvent.emit('debug', 'Saving stopped')
+        self.logEvent.emit('debug', '[USRP] Saving stopped')
         
     def stop(self):
         self.running = False

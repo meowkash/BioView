@@ -18,6 +18,7 @@ class AudioPlayer(QObject):
         
         self.loop_instruction = config.get_param('loop_instructions', True)
         self.mutex = QMutex()
+        self._should_stop = False  
         
         # Initialize pygame mixer
         try:
@@ -28,6 +29,7 @@ class AudioPlayer(QObject):
     
     def pre_run(self): 
         with QMutexLocker(self.mutex):
+            self._should_stop = False  # Reset stop flag
             try:
                 pygame.mixer.music.load(self.instruction_file)
             except Exception as e:
@@ -35,20 +37,35 @@ class AudioPlayer(QObject):
                 
     def run(self):
         with QMutexLocker(self.mutex):
+            if self._should_stop:
+                return True
+                
             try:    
                 pygame.mixer.music.play()
-
-                # Non-blocking check for audio completion
-                while pygame.mixer.music.get_busy() and self.running:
-                    self.thread().msleep(100)
-                    
-                return not self.loop_instruction  # True if should stop                    
             except Exception as e:
                 print(f"Error playing audio: {e}")
                 return True
+        
+        # Check for completion or stop signal without holding the mutex
+        while True:
+            with QMutexLocker(self.mutex):
+                if self._should_stop:
+                    pygame.mixer.music.stop()
+                    return True
+                
+                if not pygame.mixer.music.get_busy():
+                    # Audio finished naturally
+                    break
+            
+            # Sleep briefly before checking again
+            self.thread().msleep(100)
+            
+        # Audio completed - check if we should loop
+        return not self.loop_instruction  # True if should stop                    
                  
     def stop(self):
         with QMutexLocker(self.mutex):
+            self._should_stop = True
             try:
                 pygame.mixer.music.stop()
             except:
@@ -72,31 +89,41 @@ class TextInstructions(QObject):
         self.current_index = 0
         self.loop_instruction = config.get_param('loop_instructions', True)
         self.interval = config.get_param('instruction_interval', 5)  # seconds    
+        self._should_stop = False
         
     def pre_run(self):
-        pass 
+        self._should_stop = False
     
     def run(self): 
+        # Check if we should stop
+        if self._should_stop:
+            return True
+            
         # Check if we've reached the end
         if self.current_index >= len(self.instructions):
             if self.loop_instruction:
                 self.current_index = 0
             else:
-                return
+                return True  # Should stop
         
         # Send signal to update text
         instruction_text = self.instructions[self.current_index]
         self.current_index += 1
         self.textUpdate.emit(instruction_text)
         
-        # Wait for the specified interval
-        time.sleep(self.interval)
+        # Wait for the specified interval, but check for stop periodically
+        elapsed = 0
+        sleep_increment = 0.1  # Check every 100ms
+        while elapsed < self.interval and not self._should_stop:
+            time.sleep(sleep_increment)
+            elapsed += sleep_increment
+            
+        return self._should_stop  # Return True if we should stop
         
     def stop(self): 
-        pass 
+        self._should_stop = True
     
 class InstructionsWorker(QThread):
-    # Signals for communication with main thread
     logEvent = pyqtSignal(str, str)
     textUpdate = pyqtSignal(str)  # Signal to update instruction text
     showDialog = pyqtSignal()     # Signal to show the dialog
@@ -123,7 +150,7 @@ class InstructionsWorker(QThread):
             else:
                 raise Exception(f'Invalid instruction type: {self.instruction_type}')
         except Exception as e: 
-            self.logEvent.emit('error', f'Unable to initialize audio player: {e}')
+            self.logEvent.emit('error', f'Unable to initialize instruction handler: {e}')
         
     def run(self):
         if self.instruction_handler is None:
@@ -140,7 +167,9 @@ class InstructionsWorker(QThread):
             self.showDialog.emit()
         
         while self.running: 
-            self.instruction_handler.run()
+            should_stop = self.instruction_handler.run()
+            if should_stop:
+                break
         
         self.stop()
         

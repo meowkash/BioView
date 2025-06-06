@@ -13,7 +13,7 @@ def get_unique_path(dirname, filename):
     
 def init_save_file(file_path, 
                    num_channels: int, 
-                   chunk_size: int = 2040
+                   chunk_size: int = 500
                 ):
     with h5py.File(file_path, 'w') as f:
         f.create_dataset(

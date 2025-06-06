@@ -37,7 +37,6 @@ class PlotManager():
         # Plot specs
         self.config = config 
         self.display_duration = display_duration
-        self.max_buffer_size = config.get_disp_freq() // 40
         
         # Data handling 
         self.data_src = data_src
@@ -105,26 +104,12 @@ class PlotManager():
         if queue_size == 0:
             return
         
-        max_buffer_size = self.config.get_disp_freq() // 30 
-        print(f'BUFF SIZE: {max_buffer_size}')
-        
-        # # If queue is getting large, process more aggressively to catch up
-        # if queue_size > self.num_points // 8:  
-        #     # Process more points to catch up, but skip some to stay real-time
-        #     points_to_process = min(queue_size, self.num_points // 4)
-        #     skip_ratio = max(1, queue_size // points_to_process)  # Skip every Nth point
-        # else:
-        #     # Normal processing
-        #     points_to_process = min(queue_size, self.max_buffer_size)
-        #     skip_ratio = 1  # Don't skip any points
-        
-        points_to_process = queue_size
         skip_ratio = 1
         updates_made = False
         points_processed = 0
         skip_counter = 0
         
-        while not self.data_queue.empty() and points_processed < points_to_process:
+        while not self.data_queue.empty() and points_processed < queue_size:
             try:
                 new_point = self.data_queue.get_nowait()
                 
@@ -137,7 +122,6 @@ class PlotManager():
                     updates_made = True
                 
                 points_processed += 1
-                
             except queue.Empty:
                 break
         
