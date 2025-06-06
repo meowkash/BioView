@@ -155,8 +155,6 @@ class ProcessWorker(QThread):
         return save_list
     
     def run(self):
-        self.logEvent.emit('debug', 'Saving started')
-        
         # Preallocate empty buffer to get
         data_buf = []
         samples = [None] * len(self.rx_queues)
