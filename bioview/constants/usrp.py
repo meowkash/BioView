@@ -3,4 +3,4 @@ INIT_DELAY = 0.05  # 50mS initial delay before transmit
 SETTLING_TIME = 0.3
 FILLING_TIME = 0.35
 
-SAVE_BUFFER_SIZE = 100
+SAVE_BUFFER_SIZE = 20 # This is a good balance between real time display and spikes 

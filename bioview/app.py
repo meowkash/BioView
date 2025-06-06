@@ -337,7 +337,8 @@ class Viewer(QMainWindow):
             thread.start()
         for thread in self.usrp_rx_thread:
             thread.start()
-        self.bio_rx_thread.start()
+        if self.bio_rx_thread is not None:
+            self.bio_rx_thread.start()
         self.save_thread.start()
         self.display_thread.start()
         

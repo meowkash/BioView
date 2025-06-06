@@ -166,5 +166,8 @@ class ExperimentConfiguration():
     def get_log_path(self): 
         return get_unique_path(self.save_dir, f'{self.file_name}.log')
         
-    def get_save_path(self):
-        return get_unique_path(self.save_dir, f'{self.file_name}.h5') 
+    def get_save_path(self, sensor='usrp'):
+        return get_unique_path(self.save_dir, f'{self.file_name}_{sensor}.h5') 
+    
+    def get_disp_freq(self):
+        return self.get_param('samp_rate', 1e6) / (self.save_ds * self.disp_ds)

@@ -17,8 +17,7 @@ class ProcessWorker(QThread):
                  disp_queue: queue.Queue, 
                  running: bool = True,
                  saving: bool = True, 
-                 save_iq: bool = True,
-                 buffer_size: int = 2
+                 save_iq: bool = True
         ):
         super().__init__()
         self.usrp_config = usrp_config
@@ -29,9 +28,6 @@ class ProcessWorker(QThread):
         self.running = running
         self.saving = saving 
         
-        # Store a few elements in buffer before adding
-        self.buffer_size = buffer_size
-        
         # Allow for saving either IQ or Amp/Phase (default)
         self.save_iq = save_iq
         
@@ -39,7 +35,7 @@ class ProcessWorker(QThread):
         self.if_filts = [self._load_filter(freq) for freq in exp_config.channel_ifs]
         
         # Load output file
-        self.out_file = exp_config.get_save_path() 
+        self.out_file = exp_config.get_save_path('usrp') 
         if self.exp_config.save_phase:
             num_channels = 2 * len(exp_config.data_mapping)
         else:
@@ -155,40 +151,34 @@ class ProcessWorker(QThread):
         return save_list
     
     def run(self):
-        # Preallocate empty buffer to get
-        data_buf = []
+        # Preallocate empty buffer to get faster performance
+        data_buf = None
         samples = [None] * len(self.rx_queues)
         
         while self.running:
             try:
                 # Get from all queues
-                if len(data_buf) < self.buffer_size: 
-                    for idx, rx_q in enumerate(self.rx_queues): 
-                        samples[idx] = rx_q.get()
-                    data_buf.append(np.transpose(np.vstack(samples)))    
-                else: 
-                    # TODO: Correctly assign shapes
-                    self.logEvent.emit('debug', f'Buffer size: {len(data_buf)} with elem shape {data_buf[0].shape}')
-                    buffer_data = np.transpose(np.vstack(data_buf))
-                    processed = self._process(buffer_data) 
-                    self.logEvent.emit('debug', f'Processed data shape {processed.shape}')   
-                    
-                    # Add to display queue 
-                    try: 
-                        self.disp_queue.put(processed)
-                    except queue.Empty: 
-                        self.logEvent.emit('debug', 'Display Queue Empty')    
-                    except queue.Full: 
-                        self.logEvent.emit('debug', 'Display Queue Full')
-                    
-                    # Add to save queue as well (asynchronously save using save queue if performance is an issue)
-                    
-                    # Write to file, only if saving 
-                    if self.saving:
-                        update_save_file(self.out_file, processed)
-                    
-                    # Clear buffer 
-                    data_buf = []
+                for idx, rx_q in enumerate(self.rx_queues): 
+                    samples[idx] = rx_q.get()
+                data_buf = np.transpose(np.vstack(samples))
+                
+                self.logEvent.emit('debug', f'Buffer size: {len(data_buf)} with elem shape {data_buf[0].shape}')
+                buffer_data = np.transpose(np.vstack(data_buf))
+                processed = self._process(buffer_data) 
+                self.logEvent.emit('debug', f'Processed data shape {processed.shape}')   
+                
+                # Add to display queue 
+                try: 
+                    self.disp_queue.put(processed)
+                except queue.Empty: 
+                    self.logEvent.emit('debug', 'Display Queue Empty')    
+                except queue.Full: 
+                    self.logEvent.emit('debug', 'Display Queue Full')
+                
+                # Write to file, only if saving 
+                if self.saving:
+                    update_save_file(self.out_file, processed)
+                
             except queue.Empty:
                 self.logEvent.emit('debug', 'Rx Queue Empty')
                 continue

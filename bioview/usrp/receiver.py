@@ -41,7 +41,8 @@ class ReceiveWorker(QThread):
         num_channels = self.rx_streamer.get_num_channels()
         max_samps_per_packet = self.rx_streamer.get_max_num_samps()
         
-        recv_buffer_size = max_samps_per_packet * SAVE_BUFFER_SIZE # Make receive buffer larger than max_samps_per_packet
+        # Make receive buffer larger than max_samps_per_packet. This adds a latency of recv_buffer_size / sample_rate (in seconds)
+        recv_buffer_size = max_samps_per_packet * SAVE_BUFFER_SIZE 
         
         recv_buffer = np.empty((num_channels, recv_buffer_size), dtype=np.complex64)
         

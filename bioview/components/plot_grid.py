@@ -11,9 +11,8 @@ from bioview.utils import get_color_by_idx
 
 class PlotManager(): 
     def __init__(self, 
-                disp_freq: int, 
+                config, 
                 color: str,                  
-                max_buffer_size: int, 
                 display_duration: float, 
                 data_src: str = '',
                 xlabel: str = 'Time (s)',
@@ -21,8 +20,8 @@ class PlotManager():
     ):
         # UI widget 
         self.widget = pg.PlotWidget()
-        self.widget.setAntialiasing(False)
-        self.widget.getPlotItem().setDownsampling(auto=True, mode='subsample')
+        self.widget.setAntialiasing(True)
+        self.widget.getPlotItem().setDownsampling(auto=True, mode='peak')
         self.widget.enableAutoRange(pg.ViewBox.YAxis, enable=True)  
         self.widget.enableAutoRange(pg.ViewBox.XAxis, enable=False)
         self.widget.setMouseEnabled(x=False, y=False)
@@ -36,9 +35,9 @@ class PlotManager():
         self.plot_item = self.widget.plot([], [], pen=self.pen)
         
         # Plot specs
-        self.max_buffer_size = max_buffer_size
+        self.config = config 
         self.display_duration = display_duration
-        self.disp_freq = disp_freq
+        self.max_buffer_size = config.get_disp_freq() // 40
         
         # Data handling 
         self.data_src = data_src
@@ -49,7 +48,7 @@ class PlotManager():
         
     def _init_plot(self): 
         # Calculate number of points for the display duration
-        self.num_points = int(self.display_duration * self.disp_freq)
+        self.num_points = int(self.display_duration * self.config.get_disp_freq())
         
         # Initialize buffer with zeros - deque with fixed maxlen for sliding window
         self.buffer = deque([0.0] * self.num_points, maxlen=self.num_points)
@@ -76,7 +75,6 @@ class PlotManager():
                 break
     
     def add_data(self, data): 
-        """Add new data to the queue with overflow protection"""
         if isinstance(data, (list, np.ndarray)):
             # If it's an array, add each point individually to maintain proper sliding
             for point in np.atleast_1d(data):
@@ -85,7 +83,6 @@ class PlotManager():
             self._add_single_point(float(data))
     
     def _add_single_point(self, point):
-        """Add a single point with queue size management"""
         # Keep queue size reasonable - if it gets too big, we're falling behind
         max_queue_size = self.num_points // 4  # Allow max 25% of display buffer in queue
         
@@ -107,17 +104,22 @@ class PlotManager():
         
         if queue_size == 0:
             return
-            
-        # If queue is getting large, process more aggressively to catch up
-        if queue_size > self.num_points // 8:  # More than 12.5% of display buffer
-            # Process more points to catch up, but skip some to stay real-time
-            points_to_process = min(queue_size, self.num_points // 4)
-            skip_ratio = max(1, queue_size // points_to_process)  # Skip every Nth point
-        else:
-            # Normal processing
-            points_to_process = min(queue_size, 50)  # Process reasonable chunk
-            skip_ratio = 1  # Don't skip any points
         
+        max_buffer_size = self.config.get_disp_freq() // 30 
+        print(f'BUFF SIZE: {max_buffer_size}')
+        
+        # # If queue is getting large, process more aggressively to catch up
+        # if queue_size > self.num_points // 8:  
+        #     # Process more points to catch up, but skip some to stay real-time
+        #     points_to_process = min(queue_size, self.num_points // 4)
+        #     skip_ratio = max(1, queue_size // points_to_process)  # Skip every Nth point
+        # else:
+        #     # Normal processing
+        #     points_to_process = min(queue_size, self.max_buffer_size)
+        #     skip_ratio = 1  # Don't skip any points
+        
+        points_to_process = queue_size
+        skip_ratio = 1
         updates_made = False
         points_processed = 0
         skip_counter = 0
@@ -147,6 +149,7 @@ class PlotManager():
     def update_display_duration(self, duration): 
         self.display_duration = duration
         self._init_plot()
+        
 
 class PlotGrid(QWidget):
     logEvent = pyqtSignal(str, str)
@@ -161,7 +164,6 @@ class PlotGrid(QWidget):
         self.cols = 2
         self.display_duration = 10.0 
         
-        self.disp_freq = config.samp_rate / (config.save_ds * config.disp_ds)
         self.selected_channels = {} 
         
         # Set up the layout
@@ -173,7 +175,7 @@ class PlotGrid(QWidget):
         self.available_slots = []
         
         # Optimize refresh rate and ensure real-time performance
-        self.refresh_time = max(self._get_monitor_refresh_delay(), 10)  # Max 60 FPS
+        self.refresh_time = max(self._get_monitor_refresh_delay(), 10) 
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_plots)
         
@@ -208,9 +210,8 @@ class PlotGrid(QWidget):
         for r in range(self.rows):
             for c in range(self.cols):
                 plot_obj = PlotManager(
-                    disp_freq=self.disp_freq,
+                    config=self.config,
                     color = get_color_by_idx(r*self.cols + c),
-                    max_buffer_size = max(10, self.refresh_time // 10),  # Reasonable buffer size
                     display_duration = self.display_duration        
                 )
                 
