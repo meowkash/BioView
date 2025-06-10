@@ -89,7 +89,7 @@ class Controller(QThread):
             # Setup streamer objects 
             stream_args = uhd.usrp.StreamArgs(
                 self.config.cpu_format, 
-                self.config.get_param_value('wire_format')
+                self.config.get_param('wire_format')
             )
             
             stream_args.channels = tx_channels

@@ -18,13 +18,13 @@ class TransmitWorker(QThread):
         ):
         super().__init__(parent)
         # Modifiable params
-        self.tx_gain = config.get_param_value('tx_gain').copy()
-        self.tx_amplitude = config.get_param_value('tx_amplitude')
+        self.tx_gain = config.get_param('tx_gain').copy()
+        self.tx_amplitude = config.get_param('tx_amplitude')
         
         # Fixed params
-        self.samp_rate = config.get_param_value('samp_rate')
-        self.if_freq = config.get_param_value('if_freq')
-        self.tx_channels = config.get_param_value('tx_channels')
+        self.samp_rate = config.get_param('samp_rate')
+        self.if_freq = config.get_param('if_freq')
+        self.tx_channels = config.get_param('tx_channels')
         
         self._generate_tx_waveforms()    
         
@@ -73,7 +73,7 @@ class TransmitWorker(QThread):
             
         while self.running:
             # Check for updated parameters 
-            curr_tx_gain = self.config.get_param_value('tx_gain')
+            curr_tx_gain = self.config.get_param('tx_gain')
             if curr_tx_gain != self.tx_gain: 
                 for chan in self.config.tx_channels:
                     self.usrp.set_tx_gain(curr_tx_gain[chan], chan)

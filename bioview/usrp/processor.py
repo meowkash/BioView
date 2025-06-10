@@ -134,7 +134,7 @@ class ProcessWorker(QThread):
         for r_idx, row in enumerate(self.exp_config.channel_mapping):
             x = buffer[r_idx, :]
             for t_idx, channel_key in enumerate(row): 
-                channel_idx = self.exp_config.data_mapping[channel_key]
+                channel_idx = self.exp_config.data_mapping[channel_key][1]
                 # Pass the channel key for state tracking
                 first_comp, second_comp = self._process_chunk(
                     data = x, 

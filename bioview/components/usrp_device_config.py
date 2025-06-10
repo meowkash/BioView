@@ -11,7 +11,7 @@ class UsrpDeviceConfigPanel(QGroupBox):
                  config: UsrpConfiguration,  
                  parent = None
         ):
-        super().__init__(f'{config.get_param_value('device_name')} Settings', parent)
+        super().__init__(f'{config.get_param('device_name')} Settings', parent)
         self.config = config 
         self.param_inputs = {}
         self.init_ui()
@@ -71,7 +71,7 @@ class UsrpDeviceConfigPanel(QGroupBox):
             layout.addWidget(QLabel(label_text), row, 0)
             
             # Make as many spin boxes as channels specified  
-            current_values = self.config.get_param_value(param_name)
+            current_values = self.config.get_param(param_name)
             values = current_values if isinstance(current_values, (list, tuple)) else [current_values]
             
             input_widgets = []
@@ -111,13 +111,13 @@ class UsrpDeviceConfigPanel(QGroupBox):
         # We may have lists here, these need to be handled correctly
         if idx is not None: 
             # Get value, update idx from list and emit overall
-            updated_value = self.config.get_param_value(param_name)
+            updated_value = self.config.get_param(param_name)
             updated_value[idx] = value
         else:
             updated_value = value
         
         try: 
-            self.config.set_param_value(param_name, updated_value)
+            self.config.set_param(param_name, updated_value)
             self.logEvent.emit('debug', f'{self.config.device_name}: Updated {param_name} to {value} successfully')
         except Exception as e:
             self.logEvent.emit('error', f'{self.config.device_name}: Updating {param_name} failed')

@@ -252,7 +252,7 @@ class ExperimentSettingsPanel(QGroupBox):
             self.folder_path.setText(folder)
             
     def update_param(self, param_name, value):
-        self.config.set_param_value(param_name, value)
+        self.config.set_param(param_name, value)
     
     def update_button_states(self, connection_status, running_status):
         if connection_status == ConnectionStatus.CONNECTED: 

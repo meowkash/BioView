@@ -12,7 +12,7 @@ class DisplayWorker(QThread):
 
     def __init__(self, 
                  config: ExperimentConfiguration, 
-                 disp_queue: queue.Queue, 
+                 disp_queues: dict[queue.Queue], 
                  running: bool = True,
                  parent = None
         ):
@@ -24,39 +24,44 @@ class DisplayWorker(QThread):
             btype = config.disp_filter_spec['btype'],
             ftype = config.disp_filter_spec['ftype']
         )
-        self.disp_queue = disp_queue
+        self.disp_queues = disp_queues
         self.running = running
 
-    def _process(self, data):
-        disp_data = [None] * len(self.config.disp_channels) 
-        for idx, channel_key in enumerate(self.config.disp_channels):
-            channel_idx = self.config.data_mapping[channel_key]
-            
-            # Channel data is a 2D array of shape (num_samples, 2) representing real and imaginary components
-            if self.config.show_phase: 
-                channel_data = data[channel_idx, :, 1] 
-            else: 
-                channel_data = data[channel_idx, :, 0]
-             
-            # Downsample 
-            channel_data = channel_data[::self.config.disp_ds]
-               
-            # Filter                                  
-            disp_data[idx], _ = apply_filter(channel_data, self.disp_filter)
-                
-        # Return all processed data 
-        return np.array(disp_data)
+    def _process_usrp(self, data):        
+        # Downsample 
+        processed = data[::self.config.disp_ds]
+        # Filter                                  
+        processed, _ = apply_filter(processed, self.disp_filter)
+        return processed
     
     def run(self):
         self.logEvent.emit('debug', 'Display started')
         
+        disp_data = [None] * len(self.config.disp_channels) 
+        idx = 0 
+        
         while self.running:
             try:
-                # Get samples from queue
-                samples = self.disp_queue.get()                
-                # Process
-                processed = self._process(samples)                 
-                self.dataReady.emit(processed)
+                for device_type, device_queue in self.disp_queues.items(): 
+                    # Load samples
+                    samples = device_queue.get() 
+                                            
+                    if device_type == 'usrp': 
+                        processed = self._process_usrp(samples[usrp_channels, :, int(self.config.show_phase)])
+                
+                bio_channels = self.config.get_display_channels('biopac')
+                
+                for idx, channel_key in enumerate(self.config.disp_channels):
+                    (device_type, channel_idx) = self.config.data_mapping[channel_key]
+                    
+                    samples = self.disp_queues[device_type].get()  
+                    # Process
+                    if device_type == 'usrp':  
+                        pass 
+                    elif device_type == 'biopac': 
+                        disp_data[idx] = samples[channel_idx, :]
+                
+                self.dataReady.emit(np.array(disp_data))
             except queue.Empty:
                 self.logEvent.emit('error', 'Queue Empty')
                 continue

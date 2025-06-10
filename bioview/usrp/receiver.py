@@ -19,7 +19,7 @@ class ReceiveWorker(QThread):
         ):
         super().__init__(parent)
         # Modifiable params
-        self.rx_gain = config.get_param_value('rx_gain').copy()
+        self.rx_gain = config.get_param('rx_gain').copy()
         
         self.config = config 
         
@@ -68,7 +68,7 @@ class ReceiveWorker(QThread):
 
         while self.running:
             # Check for updated parameters 
-            curr_rx_gain = self.config.get_param_value('rx_gain')
+            curr_rx_gain = self.config.get_param('rx_gain')
             if curr_rx_gain != self.rx_gain: 
                 for chan in self.config.rx_channels:
                     self.usrp.set_rx_gain(curr_rx_gain[chan], chan)

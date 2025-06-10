@@ -209,7 +209,7 @@ class Viewer(QMainWindow):
             for tidx in range(len(ch_map[ridx])):
                 label = ch_map[ridx][tidx]
                 if label != '': 
-                    self.exp_config.data_mapping[label] = self.source_counter
+                    self.exp_config.data_mapping[label] = ('usrp', self.source_counter)
                     self.source_counter += 1
         
         ### [4] Add usrp Parameters
@@ -226,11 +226,11 @@ class Viewer(QMainWindow):
         if self.bio_config is None:
             return 
         
-        ### Generate Biopac channel labels:data queue index mapping
+        ### Generate Biopac channel labels:data queue index mapping alongwith absolute channel numbers
         for idx, _ in enumerate(self.bio_config.channels): 
             label = f'{self.bio_config.device_name}_Ch{idx+1}'
-            self.exp_config.data_mapping[label] = self.source_counter
-            self.source_counter += 1
+            self.exp_config.data_mapping[label] = ('biopac', idx)
+            self.bio_config.absolute_channel_nums[idx] = idx
              
     def _connect_logging(self): 
         self.plot_grid.logEvent.connect(self.log_display_panel.log_message)
@@ -319,14 +319,13 @@ class Viewer(QMainWindow):
         self.save_thread.logEvent.connect(self.log_display_panel.log_message)
         
         
-        # disp_queues = {
-        #         'usrp': self.usrp_disp_queue,
-        #         'biopac': self.bio_disp_queue
-        #     }, 
         # Create display thread 
         self.display_thread = Displayer(
             config = self.exp_config, 
-            disp_queue=self.usrp_disp_queue,
+            disp_queues = {
+                'usrp': self.usrp_disp_queue,
+                'biopac': self.bio_disp_queue
+            }, 
             running = self.running_status.value
         )
         self.display_thread.logEvent.connect(self.log_display_panel.log_message)
@@ -450,7 +449,7 @@ class Viewer(QMainWindow):
             # Update config 
             sel_channels = self.exp_config.get_param('disp_channels')
             sel_channels.append(channel)
-            self.exp_config.set_param_value('disp_channels', list(set(sel_channels)))
+            self.exp_config.set_param('disp_channels', list(set(sel_channels)))
             # Change state of UI 
             self.experiment_settings_panel.update_channel('add', channel)
     
@@ -459,7 +458,7 @@ class Viewer(QMainWindow):
             # Update config 
             sel_channels = self.exp_config.get_param('disp_channels')
             sel_channels.remove(channel)
-            self.exp_config.set_param_value('disp_channels', sel_channels)
+            self.exp_config.set_param('disp_channels', sel_channels)
             # Change state of UI 
             self.experiment_settings_panel.update_channel('remove', channel)
     
