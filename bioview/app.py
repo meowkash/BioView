@@ -10,12 +10,12 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSta
 from PyQt6.QtGui import QIcon, QGuiApplication
 from PyQt6.QtCore import QMutex
 
-from bioview.components import UsrpDeviceConfigPanel, LogDisplayPanel, ExperimentSettingsPanel, PlotGrid, AppControlPanel, AnnotateEventPanel, DeviceStatusPanel, TextDialog
-from bioview.types import ConnectionStatus, RunningStatus, UsrpConfiguration, ExperimentConfiguration
-from bioview.usrp import UsrpController, UsrpReceiver, UsrpTransmitter, UsrpProcessor
-from bioview.common import Displayer, Instructor, Saver
-from bioview.biopac import BiopacController, BiopacReceiver, BiopacProcessor
-from bioview.utils import get_channel_map
+from bioview.ui import *
+from bioview.types import *
+from bioview.usrp import *
+from bioview.common import *
+from bioview.biopac import *
+from bioview.utils import *
     
 class Viewer(QMainWindow):
     def __init__(self, 

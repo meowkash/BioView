@@ -116,13 +116,13 @@ Check `crash.log` for detailed error information and diagnostic data.
 ```bash
 bioview/
 ├── app.py              # Main application
-├── usrp/               # USRP core functionality
-├── common/             # Common functionality
-├── components/         # GUI components
 ├── biopac/             # BIOPAC integration
-├── utils/              # Utility functions
+├── common/             # Common functionality
+├── constants/          # App-specific constants
 ├── types/              # Custom data-types 
-└── constants/          # App-specific constants
+├── ui/                 # GUI components
+├── usrp/               # USRP core functionality
+└── utils/              # Utility functions
 ```
 
 ### Instructions
