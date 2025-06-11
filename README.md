@@ -1,6 +1,8 @@
 # BioView
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge&label=License&labelColor=%23084594&color=%234292c6)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI - Version](https://img.shields.io/pypi/v/bioview?style=for-the-badge&label=Version&labelColor=%23005a32&color=%2341ab5d)](https://pypi.org/project/bioview)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/bioview?style=for-the-badge&label=Downloads&labelColor=%234a1486&color=%236a51a3)
 
 BioView is a versatile, extensible, and performant cross-platform app for biomedical and human-computer interface instrumentation control, including Ettus USRPs and BIOPAC devices.
 
@@ -144,4 +146,10 @@ Ensure you make your changes in forks and submit PRs for review.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See the LICENSE file for the complete license text.
+Copyright (c) 2025 Aakash Kapoor
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
