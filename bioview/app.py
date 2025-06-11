@@ -1,21 +1,35 @@
 # For some ass-backward reason, both uhd and time are ESSENTIAL for the app to not crash
-import uhd
-import time
-
-import os
-import queue
 import logging
+import queue
+import time
+from pathlib import Path
 
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStatusBar
-from PyQt6.QtGui import QIcon, QGuiApplication
+import uhd
 from PyQt6.QtCore import QMutex
+from PyQt6.QtGui import QGuiApplication, QIcon
+from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.ui import *
-from bioview.types import *
-from bioview.usrp import *
-from bioview.common import *
-from bioview.biopac import *
-from bioview.utils import *
+from bioview.biopac import BiopacController, BiopacProcessor, BiopacReceiver
+from bioview.common import Displayer, Instructor, Saver
+from bioview.types import (
+    BiopacConfiguration,
+    ConnectionStatus,
+    ExperimentConfiguration,
+    RunningStatus,
+    UsrpConfiguration,
+)
+from bioview.ui import (
+    AnnotateEventPanel,
+    AppControlPanel,
+    DeviceStatusPanel,
+    ExperimentSettingsPanel,
+    LogDisplayPanel,
+    PlotGrid,
+    TextDialog,
+    UsrpDeviceConfigPanel,
+)
+from bioview.usrp import UsrpController, UsrpProcessor, UsrpReceiver, UsrpTransmitter
+from bioview.utils import get_channel_map
 
 
 class Viewer(QMainWindow):
@@ -97,8 +111,11 @@ class Viewer(QMainWindow):
     def _init_ui(self):
         ### Define main wndow
         self.setWindowTitle("BioView")
-        scriptDir = os.path.dirname(os.path.realpath(__file__))
-        self.setWindowIcon(QIcon(os.path.join(scriptDir, "assets", "icon.png")))
+        iconDir = (
+            Path(__file__).resolve().parent.parent / "docs" / "assets" / "icon.png"
+        )
+
+        self.setWindowIcon(QIcon(str(iconDir)))
         screen = QGuiApplication.primaryScreen().geometry()
         width = screen.width()
         height = screen.height()
@@ -242,7 +259,7 @@ class Viewer(QMainWindow):
 
         ### Generate Biopac channel labels:data queue index mapping alongwith absolute channel numbers
         for idx, _ in enumerate(self.bio_config.channels):
-            label = f"{self.bio_config.device_name}_Ch{idx+1}"
+            label = f"{self.bio_config.device_name}_Ch{idx + 1}"
             self.exp_config.data_mapping[label] = ("biopac", idx)
             self.bio_config.absolute_channel_nums[idx] = idx
 
