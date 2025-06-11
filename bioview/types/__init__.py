@@ -5,9 +5,9 @@ from .status import RunningStatus, ConnectionStatus
 from .usrp import UsrpConfiguration
 
 __all__ = [
-    'BiopacConfiguration', 
-    'ExperimentConfiguration',
-    'RunningStatus',
-    'ConnectionStatus',
-    'UsrpConfiguration'
+    "BiopacConfiguration",
+    "ExperimentConfiguration",
+    "RunningStatus",
+    "ConnectionStatus",
+    "UsrpConfiguration",
 ]

@@ -4,7 +4,7 @@ from bioview import (
     constants as constants,
     types as types,
     ui as ui,
-    usrp as usrp
+    usrp as usrp,
 )
 
 # Optional functionality with third-party dependencies

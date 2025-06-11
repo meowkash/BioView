@@ -9,12 +9,12 @@ from .text_dialog import TextDialog
 from .usrp_device_config import UsrpDeviceConfigPanel
 
 __all__ = [
-    'AnnotateEventPanel',
-    'AppControlPanel',
-    'DeviceStatusPanel',
-    'ExperimentSettingsPanel',
-    'LogDisplayPanel',
-    'PlotGrid',
-    'TextDialog',
-    'UsrpDeviceConfigPanel'
+    "AnnotateEventPanel",
+    "AppControlPanel",
+    "DeviceStatusPanel",
+    "ExperimentSettingsPanel",
+    "LogDisplayPanel",
+    "PlotGrid",
+    "TextDialog",
+    "UsrpDeviceConfigPanel",
 ]

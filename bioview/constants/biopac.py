@@ -17,5 +17,5 @@ BIOPAC_CONNECTION_CODES = {
     16: "MPSOCKERR",
     17: "MPUNDRFLOW",
     18: "MPPRESETERR",
-    19: "MPPARSEERR"
-}        
+    19: "MPPARSEERR",
+}
