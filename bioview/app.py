@@ -474,4 +474,3 @@ class Viewer(QMainWindow):
         # Ensure all threads are closed
         self.stop_recording()
         return super().closeEvent(a0)
-    

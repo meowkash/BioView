@@ -1,5 +1,5 @@
-import pygame
 import time 
+import pygame
 from pathlib import Path
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, QMutex, QMutexLocker
 

@@ -17,8 +17,13 @@ dependencies = [
     "darkdetect (>=0.8.0,<0.9.0)",
     "qtawesome (>=1.4.0,<2.0.0)",
     "numpy (<2.0.0)",
-    "pygame (>=2.6.1,<3.0.0)",
+    "pygame (>=2.6.1,<3.0.0)",  
     "uhd (>=4.8.0.0,<5.0.0.0) ; sys_platform == \"win32\"",
+]
+
+[project.optional-dependencies]
+rt = [
+    "nearpy (>=0.9.0)"
 ]
 
 [build-system]

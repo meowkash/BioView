@@ -2,9 +2,7 @@
 Ref: uhd examples
 '''
 import time 
-import struct 
 import numpy as np 
-from pathlib import Path 
 from datetime import datetime, timedelta
 
 from bioview.constants import CLOCK_TIMEOUT
@@ -118,31 +116,3 @@ def check_channels(usrp, rx_channels, tx_channels):
         return [], []
     
     return rx_channels, tx_channels
-
-def read_file(fpath: str | Path, 
-              channels: list,
-              data_format: str = 'i8f'): 
-    # Utility function to unpack stored files 
-    buf_size = struct.calcsize(data_format)
-    
-    data_dict = {ch: [] for ch in channels}
-    data_dict['Samples'] = []
-     
-    with open(fpath, 'rb') as f: 
-        while True:
-            data = f.read(buf_size)
-            
-            # Check for EOF
-            if not data or len(data) < buf_size:
-                print(f'Finished reading data')
-                break
-            
-            # Unpack the data
-            values = struct.unpack(data_format, data)
-            
-            # Store in a proper format
-            data_dict['Samples'].append(values[0])
-            for idx, ch in enumerate(channels): 
-                data_dict[ch].append(complex(values[idx*2+1], values[idx*2+2])) 
-    
-    return data_dict
