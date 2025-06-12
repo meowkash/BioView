@@ -1,10 +1,10 @@
 import queue
-import numpy as np
 
+import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.utils import get_filter, apply_filter
 from bioview.types import ExperimentConfiguration
+from bioview.utils import apply_filter, get_filter
 
 
 class DisplayWorker(QThread):
@@ -48,12 +48,12 @@ class DisplayWorker(QThread):
                     # Load samples
                     samples = device_queue.get()
 
-                    if device_type == "usrp":
-                        processed = self._process_usrp(
-                            samples[usrp_channels, :, int(self.config.show_phase)]
-                        )
+                    # if device_type == "usrp":
+                    #     processed = self._process_usrp(
+                    #         samples[usrp_channels, :, int(self.config.show_phase)]
+                    #     )
 
-                bio_channels = self.config.get_display_channels("biopac")
+                # bio_channels = self.config.get_display_channels("biopac")
 
                 for idx, channel_key in enumerate(self.config.disp_channels):
                     (device_type, channel_idx) = self.config.data_mapping[channel_key]

@@ -1,19 +1,15 @@
 # Core functionality that should always be available
-from bioview import (
-    common as common,
-    constants as constants,
-    types as types,
-    ui as ui,
-    usrp as usrp,
-)
+from bioview import constants as constants
+from bioview import types as types
+from bioview import ui as ui
 
 # Optional functionality with third-party dependencies
 try:
-    from bioview import biopac as biopac
+    import bioview.device.biopac as biopac
 except ImportError:
     pass
 
 try:
-    from bioview import usrp as usrp
+    import bioview.device.usrp as usrp
 except ImportError:
     pass

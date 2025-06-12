@@ -1,6 +1,7 @@
-import uhd
 import math
+
 import numpy as np
+import uhd
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.constants import INIT_DELAY
@@ -36,22 +37,24 @@ class TransmitWorker(QThread):
         self.running = running
         self.tx_buffer_size = self.tx_streamer.get_max_num_samps()
 
+    def _get_buf_size(self, freq):
+        return self.samp_rate * freq / (math.gcd(int(self.samp_rate), int(freq)) ** 2)
+
+    def _get_lcm(self, a, b):
+        return int(a * b / math.gcd(int(a), int(b)))
+
     def _generate_tx_waveforms(self):
         """
         Generate sine waves for each Tx channel, using as minimum a buffer size as possible.
         The buffer is made larger in length to be able to read circularly without causing overflow issues
         """
-        get_buf_size = lambda x: int(
-            self.samp_rate * x / (math.gcd(int(self.samp_rate), int(x)) ** 2)
-        )
-        get_lcm = lambda a, b: int(a * b / math.gcd(int(a), int(b)))
 
         if len(self.if_freq) == 1:
-            self.tx_waveform_size = get_buf_size(self.if_freq[0])
+            self.tx_waveform_size = self._get_buf_size(self.if_freq[0])
         else:
             # Return the least common multiple
-            self.tx_waveform_size = get_lcm(
-                get_buf_size(self.if_freq[0]), get_buf_size(self.if_freq[1])
+            self.tx_waveform_size = self._get_lcm(
+                self._get_buf_size(self.if_freq[0]), self._get_buf_size(self.if_freq[1])
             )
 
         len_buf = 20 * self.tx_waveform_size

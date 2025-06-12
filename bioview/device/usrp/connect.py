@@ -1,17 +1,16 @@
 import uhd
-
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.utils import (
-    setup_ref,
-    setup_pps,
     check_channels,
     get_usrp_address,
+    setup_pps,
+    setup_ref,
     update_usrp_address,
 )
 
 
-class Controller(QThread):
+class ConnectWorker(QThread):
     initSucceeded = pyqtSignal(uhd.usrp.MultiUSRP, object, object)
     initFailed = pyqtSignal(str)
     logEvent = pyqtSignal(str, str)

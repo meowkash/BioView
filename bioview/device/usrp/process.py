@@ -1,10 +1,10 @@
 import queue
-import numpy as np
 
+import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.utils import init_save_file, update_save_file, get_filter, apply_filter
-from bioview.types import UsrpConfiguration, ExperimentConfiguration
+from bioview.types import ExperimentConfiguration, UsrpConfiguration
+from bioview.utils import apply_filter, get_filter, init_save_file, update_save_file
 
 
 class ProcessWorker(QThread):

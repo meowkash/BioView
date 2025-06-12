@@ -1,7 +1,8 @@
 import time
-import pygame
 from pathlib import Path
-from PyQt6.QtCore import QThread, QObject, pyqtSignal, QMutex, QMutexLocker
+
+import pygame
+from PyQt6.QtCore import QMutex, QMutexLocker, QObject, QThread, pyqtSignal
 
 from bioview.types import ExperimentConfiguration
 
@@ -66,7 +67,7 @@ class AudioPlayer(QObject):
             self._should_stop = True
             try:
                 pygame.mixer.music.stop()
-            except:
+            except Exception:
                 pass
 
 
@@ -78,8 +79,8 @@ class TextInstructions(QObject):
         f_path = Path(config.get_param("instruction_file", ""))
 
         try:
-            self.instructions = open(f_path, "r").read().splitlines()
-        except Exception as e:
+            self.instructions = open(f_path).read().splitlines()
+        except Exception:
             return
 
         self.current_index = 0
@@ -120,7 +121,7 @@ class TextInstructions(QObject):
         self._should_stop = True
 
 
-class InstructionsWorker(QThread):
+class InstructionWorker(QThread):
     logEvent = pyqtSignal(str, str)
     textUpdate = pyqtSignal(str)  # Signal to update instruction text
     showDialog = pyqtSignal()  # Signal to show the dialog

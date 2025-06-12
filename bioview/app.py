@@ -9,15 +9,11 @@ from PyQt6.QtCore import QMutex
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.biopac import BiopacController, BiopacProcessor, BiopacReceiver
-from bioview.common import Displayer, Instructor, Saver
-from bioview.types import (
-    BiopacConfiguration,
-    ConnectionStatus,
-    ExperimentConfiguration,
-    RunningStatus,
-    UsrpConfiguration,
-)
+from bioview.device import get_device_object
+from bioview.device.biopac import BiopacReceiver
+from bioview.device.common import DisplayWorker, InstructionWorker, SaveWorker
+from bioview.device.usrp import MultiUsrpDevice, UsrpDevice, UsrpProcessor
+from bioview.types import ConnectionStatus, ExperimentConfiguration, RunningStatus
 from bioview.ui import (
     AnnotateEventPanel,
     AppControlPanel,
@@ -28,36 +24,42 @@ from bioview.ui import (
     TextDialog,
     UsrpDeviceConfigPanel,
 )
-from bioview.usrp import UsrpController, UsrpProcessor, UsrpReceiver, UsrpTransmitter
-from bioview.utils import get_channel_map
 
 
 class Viewer(QMainWindow):
     def __init__(
         self,
+        device_config: dict,
         exp_config: ExperimentConfiguration,
-        usrp_config: list[UsrpConfiguration] = None,
-        bio_config=None,
     ):
         super().__init__()
         self.mutex = QMutex()
 
-        ### Load configurations
         self.exp_config = exp_config
-        self.usrp_config = usrp_config
-        self.bio_config = bio_config
+        self.device_config = device_config
 
-        ### Process configurations
-        self.source_counter = 0
-        self._generate_usrp_mappings()
-        self._generate_biopac_mappings()
+        # Create device handlers
+        self.device_handlers = {}
+        for dev_type, dev_cfg in device_config.items():
+            dev_obj = get_device_object(dev_cfg)
+            dev_obj.connectionStateChanged.connect(
+                lambda value: self.update_connection_status(
+                    device=dev_type, state=value
+                )
+            )
+            self.device_handlers[dev_type] = dev_obj
 
-        ### Track state
+        # Initialize device states
+        self.device_states = {}
+        for dev_type in device_config.keys():
+            self.device_states[dev_type] = ConnectionStatus.DISCONNECTED
+
+        # Track state
         self.connection_status = ConnectionStatus.DISCONNECTED
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False
 
-        ### Track instruction
+        # Track instruction
         if exp_config.get_param("instruction_type") is None:
             self.enable_instructions = False
         else:
@@ -67,31 +69,14 @@ class Viewer(QMainWindow):
         if exp_config.get_param("instruction_type") == "text":
             self.instruction_dialog = TextDialog()
 
-        ### Populate list of devices
-        self.devices = {}
-        for cfg in self.usrp_config:
-            self.devices[cfg.device_name] = ConnectionStatus.DISCONNECTED
-        if bio_config is not None:
-            self.devices[bio_config.device_name] = ConnectionStatus.DISCONNECTED
-
-        ### Set up UI
+        # Set up UI
         self._init_ui()
-
-        ### USRP Specific Variables
-        self.usrps = [None] * len(self.usrp_config)
-        self.tx_streamers = [None] * len(self.usrp_config)
-        self.rx_streamers = [None] * len(self.usrp_config)
 
         ### BIOPAC Specific Variables
         self.biopac = None
 
         ### Threads
-        # USRP
-        self.usrp_init_thread = [None] * len(self.usrp_config)
-        self.usrp_tx_thread = [None] * len(self.usrp_config)
-        self.usrp_rx_thread = [None] * len(self.usrp_config)
         # BIOPAC
-        self.bio_init_thread = None
         self.bio_rx_thread = None
         # Common
         self.save_thread = None
@@ -99,7 +84,7 @@ class Viewer(QMainWindow):
         self.instructions_thread = None
 
         ### Data Queues
-        self.usrp_rx_queue = [queue.Queue() for _ in range(len(self.usrp_config))]
+        # self.usrp_rx_queue = [queue.Queue() for _ in range(len(self.usrp_config))]
         self.usrp_disp_queue = queue.Queue(maxsize=10000)
 
         self.bio_rx_queue = queue.Queue()
@@ -166,9 +151,14 @@ class Viewer(QMainWindow):
         )
 
         ### USRP Device Config Panel(s)
-        self.usrp_config_panel = [None] * len(self.usrp_config)
-        for idx, usrp_cfg in enumerate(self.usrp_config):
-            self.usrp_config_panel[idx] = UsrpDeviceConfigPanel(usrp_cfg)
+        usrp_cfg = []
+        for handler in self.device_handlers.values():
+            if handler.device_type == "multi_usrp":
+                usrp_cfg = handler.config
+
+        self.usrp_config_panel = [None] * len(usrp_cfg)
+        for idx, cfg in enumerate(usrp_cfg):
+            self.usrp_config_panel[idx] = UsrpDeviceConfigPanel(cfg)
             experiment_layout.addWidget(self.usrp_config_panel[idx], stretch=1)
 
         controls_layout.addLayout(experiment_layout, stretch=4)
@@ -202,70 +192,15 @@ class Viewer(QMainWindow):
         ### Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.device_status_panel = DeviceStatusPanel(self.devices)
+        self.device_status_panel = DeviceStatusPanel(self.device_states)
         # Add device status panel to status bar (on the right side)
         self.status_bar.addPermanentWidget(self.device_status_panel)
         # Add some info text to status bar
         self.status_bar.showMessage("Ready")
 
-    def _generate_usrp_mappings(self):
-        if self.usrp_config is None:
-            return
-
-        ### [1] -  Generate channel internal:external mapping
-        counter = 0
-        for idx, cfg in enumerate(self.usrp_config):
-            self.usrp_config[idx].absolute_channel_nums = [
-                counter + val for val in cfg.rx_channels
-            ]
-            counter += len(cfg.rx_channels)
-
-        ### [2] - Generate usrp channel pair labels
-        if getattr(self.exp_config, "channel_mapping", None) is None:
-            num_usrp_devices = len(self.usrp_config)
-            rx_per_usrp = [len(x.rx_channels) for x in self.usrp_config]
-            tx_per_usrp = [len(x.tx_channels) for x in self.usrp_config]
-
-            self.exp_config.channel_mapping = get_channel_map(
-                n_devices=num_usrp_devices,
-                rx_per_dev=rx_per_usrp,
-                tx_per_dev=tx_per_usrp,
-                balance=getattr(self.exp_config, "balance", False),
-                multi_pairs=getattr(self.exp_config, "multi_pairs", None),
-            )
-
-        ### [3] - Generate usrp channel pair labels:data queue index mapping
-        ch_map = self.exp_config.channel_mapping
-        for ridx in range(len(ch_map)):
-            for tidx in range(len(ch_map[ridx])):
-                label = ch_map[ridx][tidx]
-                if label != "":
-                    self.exp_config.data_mapping[label] = ("usrp", self.source_counter)
-                    self.source_counter += 1
-
-        ### [4] Add usrp Parameters
-        # Store sampling rate
-        self.exp_config.samp_rate = self.usrp_config[0].samp_rate
-        # Populate list of all channel frequencies
-        channel_ifs = [None] * len(self.exp_config.channel_mapping)
-        for cfg in self.usrp_config:
-            for idx, abs_idx in enumerate(cfg.absolute_channel_nums):
-                channel_ifs[abs_idx] = cfg.if_freq[idx]
-        self.exp_config.channel_ifs = channel_ifs
-
-    def _generate_biopac_mappings(self):
-        if self.bio_config is None:
-            return
-
-        ### Generate Biopac channel labels:data queue index mapping alongwith absolute channel numbers
-        for idx, _ in enumerate(self.bio_config.channels):
-            label = f"{self.bio_config.device_name}_Ch{idx + 1}"
-            self.exp_config.data_mapping[label] = ("biopac", idx)
-            self.bio_config.absolute_channel_nums[idx] = idx
-
     def _connect_logging(self):
         self.plot_grid.logEvent.connect(self.log_display_panel.log_message)
-        for idx, panel in enumerate(self.usrp_config_panel):
+        for _, panel in enumerate(self.usrp_config_panel):
             panel.logEvent.connect(self.log_display_panel.log_message)
 
     def start_initialization(self):
@@ -274,72 +209,16 @@ class Viewer(QMainWindow):
         self.connection_status = ConnectionStatus.CONNECTING
         self.update_buttons()
 
-        # USRP
-        for idx, config in enumerate(self.usrp_config):
-            self.usrp_init_thread[idx] = UsrpController(config)
-            self.usrp_init_thread[idx].initSucceeded.connect(
-                lambda usrp, tx_streamer, rx_streamer, idx=idx: self.on_usrp_init_success(
-                    usrp=usrp, tx_streamer=tx_streamer, rx_streamer=rx_streamer, idx=idx
-                )
-            )
-            self.usrp_init_thread[idx].initFailed.connect(self.on_init_failure)
-            self.usrp_init_thread[idx].logEvent.connect(
-                self.log_display_panel.log_message
-            )
-
-            dev_name = self.usrp_config[idx].device_name
-            self.device_status_panel.update_device_state(
-                device_name=dev_name, new_state=ConnectionStatus.CONNECTING
-            )
-            time.sleep(0.05)
-            self.usrp_init_thread[idx].start()
-            self.usrp_init_thread[idx].wait()
-
-        # BIOPAC
-        if self.bio_config is not None:
-            self.bio_init_thread = BiopacController(self.bio_config)
-            self.bio_init_thread.initSucceeded.connect(self.on_bio_init_success)
-            self.bio_init_thread.initFailed.connect(self.on_init_failure)
-            self.bio_init_thread.logEvent.connect(self.log_display_panel.log_message)
-            self.device_status_panel.update_device_state(
-                device_name="BIOPAC", new_state=ConnectionStatus.CONNECTING
-            )
-            self.bio_init_thread.start()
-            self.bio_init_thread.wait()
+        for handler in self.device_handlers.values():
+            handler.connect()
 
     def start_recording(self):
         # Update state
         self.running_status = RunningStatus.RUNNING
         self.connection_status = ConnectionStatus.CONNECTED
 
-        # Create USRP streaming threads
-        for idx, cfg in enumerate(self.usrp_config):
-            self.usrp_tx_thread[idx] = UsrpTransmitter(
-                config=cfg, usrp=self.usrps[idx], tx_streamer=self.tx_streamers[idx]
-            )
-            self.usrp_tx_thread[idx].logEvent.connect(
-                self.log_display_panel.log_message
-            )
-
-        # Create USRP receiving threads
-        for idx, cfg in enumerate(self.usrp_config):
-            self.usrp_rx_thread[idx] = UsrpReceiver(
-                usrp=self.usrps[idx],
-                config=cfg,
-                rx_streamer=self.rx_streamers[idx],
-                rx_queue=self.usrp_rx_queue[idx],
-                running=self.running_status.value,
-            )
-            self.usrp_rx_thread[idx].logEvent.connect(
-                self.log_display_panel.log_message
-            )
-
-        # Create BIOPAC receiving threads
-        if self.bio_config is not None:
-            self.bio_rx_thread = BiopacReceiver(
-                biopac=self.biopac, config=self.bio_config, rx_queue=self.bio_rx_queue
-            )
-            self.bio_rx_thread.logEvent.connect(self.log_display_panel.log_message)
+        for handler in self.device_handlers.values():
+            handler.run()
 
         # Create saving thread
         self.save_thread = UsrpProcessor(
@@ -353,7 +232,7 @@ class Viewer(QMainWindow):
         self.save_thread.logEvent.connect(self.log_display_panel.log_message)
 
         # Create display thread
-        self.display_thread = Displayer(
+        self.display_thread = DisplayWorker(
             config=self.exp_config,
             disp_queues={"usrp": self.usrp_disp_queue, "biopac": self.bio_disp_queue},
             running=self.running_status.value,
@@ -363,7 +242,7 @@ class Viewer(QMainWindow):
 
         # Create instruction thread
         if self.enable_instructions:
-            self.instructions_thread = Instructor(config=self.exp_config)
+            self.instructions_thread = InstructionWorker(config=self.exp_config)
             if self.instruction_dialog is not None:
                 self.instructions_thread.textUpdate.connect(
                     self.instruction_dialog.update_instruction_text
@@ -374,10 +253,6 @@ class Viewer(QMainWindow):
             self.instructions_thread.start()
 
         # Start all threads together
-        for thread in self.usrp_tx_thread:
-            thread.start()
-        for thread in self.usrp_rx_thread:
-            thread.start()
         if self.bio_rx_thread is not None:
             self.bio_rx_thread.start()
         self.save_thread.start()
@@ -391,76 +266,36 @@ class Viewer(QMainWindow):
         self.running_status = RunningStatus.STOPPED
         self.connection_status = ConnectionStatus.CONNECTED
 
-        # Stop receiving threads
-        for rx_thread in self.usrp_rx_thread:
-            if rx_thread is not None:
-                rx_thread.stop()
+        for handler in self.device_handlers.values():
+            handler.stop()
 
         # Stop instruction
         if self.instructions_thread is not None:
             self.instructions_thread.stop()
 
-        # Stop saving thread
-        if self.save_thread is not None:
-            self.save_thread.stop()
-
         # Stop display thread
         if self.display_thread is not None:
             self.display_thread.stop()
-
-        # Stop streaming threads
-        for tx_thread in self.usrp_tx_thread:
-            if tx_thread is not None:
-                tx_thread.stop()
 
         # Update UI
         self.update_buttons()
 
     def perform_gain_balancing(self):
-        # TODO: Implement signal balancing here
-        pass
+        for handler in self.device_handlers.values():
+            if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
+                handler.balance_gain()
 
     def perform_frequency_sweep(self):
-        pass
+        for handler in self.device_handlers.values():
+            if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
+                handler.sweep_frequency()
 
-    def update_buttons(self):
-        self.app_control_panel.update_button_states(
-            self.connection_status, self.running_status
-        )
-        self.experiment_settings_panel.update_button_states(
-            self.connection_status, self.running_status
-        )
+    def update_connection_status(self, device, state):
+        self.device_states[device] = state
+        self.device_status_panel.update_device_state(device, state)
 
-    def on_usrp_init_success(self, usrp, tx_streamer, rx_streamer, idx=0):
-        self.usrps[idx] = usrp
-        self.tx_streamers[idx] = tx_streamer
-        self.rx_streamers[idx] = rx_streamer
-
-        # Update status bar
-        dev_name = self.usrp_config[idx].device_name
-        self.devices[dev_name] = ConnectionStatus.CONNECTED
-        self.device_status_panel.update_device_state(
-            device_name=dev_name, new_state=ConnectionStatus.CONNECTED
-        )
-
-        # If all devices have inited, do an overall status update
-        self.on_init_success()
-
-    def on_bio_init_success(self, biopac):
-        self.biopac = biopac
-        dev_name = self.bio_config.device_name
-        self.devices[dev_name] = ConnectionStatus.CONNECTED
-        self.device_status_panel.update_device_state(
-            device_name=dev_name, new_state=ConnectionStatus.CONNECTED
-        )
-
-        # If all devices have inited, do an overall status update
-        self.on_init_success()
-
-    def on_init_success(self):
-        self.mutex.lock()
         inited = True
-        for dev_name, dev_state in self.devices.items():
+        for _, dev_state in self.device_states.items():
             if dev_state != ConnectionStatus.CONNECTED:
                 inited = False
                 break
@@ -470,7 +305,17 @@ class Viewer(QMainWindow):
             self.connection_status = ConnectionStatus.CONNECTED
             self.update_buttons()
 
-        self.mutex.unlock()
+    def update_running_status(self, state):
+        self.running_status = state
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.app_control_panel.update_button_states(
+            self.connection_status, self.running_status
+        )
+        self.experiment_settings_panel.update_button_states(
+            self.connection_status, self.running_status
+        )
 
     def on_init_failure(self, error_message):
         self.running_status = RunningStatus.NOINIT

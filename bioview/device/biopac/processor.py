@@ -2,8 +2,8 @@ import queue
 
 from PyQt6.QtCore import QThread
 
-from bioview.utils import init_save_file, update_save_file
 from bioview.types import BiopacConfiguration, ExperimentConfiguration
+from bioview.utils import init_save_file, update_save_file
 
 
 class ProcessWorker(QThread):

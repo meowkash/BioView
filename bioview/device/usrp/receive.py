@@ -1,9 +1,10 @@
-import uhd
 import queue
+
 import numpy as np
+import uhd
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.constants import INIT_DELAY, SETTLING_TIME, SAVE_BUFFER_SIZE
+from bioview.constants import INIT_DELAY, SAVE_BUFFER_SIZE, SETTLING_TIME
 from bioview.types import UsrpConfiguration
 
 
@@ -136,7 +137,7 @@ class ReceiveWorker(QThread):
             # Copy samples to avoid buffer overwrite and put in queue
             # recv_buffer.dtype = np.complex64 (since default cpu_format = 'fc32')
             try:
-                self.rx_queue.put((recv_buffer))
+                self.rx_queue.put(recv_buffer)
             except queue.Full:
                 self.logEvent.emit("warning", "Rx Queue full, dropping buffer")
             except queue.Empty:

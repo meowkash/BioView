@@ -1,4 +1,4 @@
-from ctypes import c_int, c_double, byref
+from ctypes import byref, c_double, c_int
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -54,5 +54,5 @@ class Controller(QThread):
         # Cleanup device handler
         try:
             wrap_result_code(self.biopac.disconnectMPDev())
-        except Exception as e:
+        except Exception:
             self.logEvent.emit("info", "BIOPAC connection already closed")
