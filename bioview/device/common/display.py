@@ -3,7 +3,6 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.types import ExperimentConfiguration
 from bioview.utils import apply_filter, get_filter
 
 
@@ -13,59 +12,69 @@ class DisplayWorker(QThread):
 
     def __init__(
         self,
-        config: ExperimentConfiguration,
-        disp_queues: dict[queue.Queue],
+        data_queue: queue.Queue,
+        disp_ds: int = 1,
+        disp_channels: list = [],
+        disp_filter_spec: dict = None,
         running: bool = True,
         parent=None,
     ):
         super().__init__(parent)
-        self.config = config
-        self.disp_filter = get_filter(
-            bounds=config.disp_filter_spec["bounds"],
-            samp_rate=config.samp_rate // (config.disp_ds * config.save_ds),
-            btype=config.disp_filter_spec["btype"],
-            ftype=config.disp_filter_spec["ftype"],
-        )
-        self.disp_queues = disp_queues
+        self.disp_ds = disp_ds
+        self.disp_channels = disp_channels
+
+        self.disp_filter_spec = disp_filter_spec
+        self.disp_filter = None
+        self._load_disp_filter()
+
+        self.data_queue = data_queue
         self.running = running
 
-    def _process_usrp(self, data):
+    def _load_disp_filter(self):
+        if self.disp_filter_spec is None:
+            self.disp_filter = None
+            return
+        else:
+            self.disp_filter = get_filter(
+                bounds=self.disp_filter_spec["bounds"],
+                samp_rate=self.disp_filter_spec["samp_rate"],
+                btype=self.disp_filter_spec["btype"],
+                ftype=self.disp_filter_spec["ftype"],
+            )
+
+    def _update_disp_filter(self, param, value):
+        if self.disp_filter_spec is None:
+            self.disp_filter_spec = {}
+
+        self.disp_filter_spec[param] = value
+        # Update filter
+        self._load_disp_filter()
+
+    def _process(self, data):
         # Downsample
-        processed = data[:: self.config.disp_ds]
+        processed = data[:: self.disp_ds]
         # Filter
-        processed, _ = apply_filter(processed, self.disp_filter)
+        if self.disp_filter is not None:
+            processed, _ = apply_filter(processed, self.disp_filter)
         return processed
 
     def run(self):
         self.logEvent.emit("debug", "Display started")
 
-        disp_data = [None] * len(self.config.disp_channels)
-        idx = 0
-
         while self.running:
+            if len(self.disp_channels) == 0:
+                continue
+
             try:
-                for device_type, device_queue in self.disp_queues.items():
-                    # Load samples
-                    samples = device_queue.get()
+                # Load samples
+                samples = self.data_queue.get()
 
-                    # if device_type == "usrp":
-                    #     processed = self._process_usrp(
-                    #         samples[usrp_channels, :, int(self.config.show_phase)]
-                    #     )
+                # Only process selected channels
+                disp_ch_idx = [self.data_mapping[key] for key in self.disp_channels]
+                disp_samples = samples[disp_ch_idx, :]
+                processed = self._process(disp_samples)
 
-                # bio_channels = self.config.get_display_channels("biopac")
-
-                for idx, channel_key in enumerate(self.config.disp_channels):
-                    (device_type, channel_idx) = self.config.data_mapping[channel_key]
-
-                    samples = self.disp_queues[device_type].get()
-                    # Process
-                    if device_type == "usrp":
-                        pass
-                    elif device_type == "biopac":
-                        disp_data[idx] = samples[channel_idx, :]
-
-                self.dataReady.emit(np.array(disp_data))
+                self.dataReady.emit(np.array(processed))
             except queue.Empty:
                 self.logEvent.emit("error", "Queue Empty")
                 continue

@@ -10,9 +10,7 @@ from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
 from bioview.device import get_device_object
-from bioview.device.biopac import BiopacReceiver
-from bioview.device.common import DisplayWorker, InstructionWorker, SaveWorker
-from bioview.device.usrp import MultiUsrpDevice, UsrpDevice, UsrpProcessor
+from bioview.device.common import DisplayWorker, InstructionWorker
 from bioview.types import ConnectionStatus, ExperimentConfiguration, RunningStatus
 from bioview.ui import (
     AnnotateEventPanel,
@@ -41,7 +39,7 @@ class Viewer(QMainWindow):
         # Create device handlers
         self.device_handlers = {}
         for dev_type, dev_cfg in device_config.items():
-            dev_obj = get_device_object(dev_cfg)
+            dev_obj = get_device_object(config=dev_cfg, exp_config=exp_config)
             dev_obj.connectionStateChanged.connect(
                 lambda value: self.update_connection_status(
                     device=dev_type, state=value
@@ -72,25 +70,13 @@ class Viewer(QMainWindow):
         # Set up UI
         self._init_ui()
 
-        ### BIOPAC Specific Variables
-        self.biopac = None
-
-        ### Threads
-        # BIOPAC
-        self.bio_rx_thread = None
-        # Common
-        self.save_thread = None
-        self.display_thread = None
+        ### Common Threads
         self.instructions_thread = None
 
         ### Data Queues
-        # self.usrp_rx_queue = [queue.Queue() for _ in range(len(self.usrp_config))]
         self.usrp_disp_queue = queue.Queue(maxsize=10000)
 
-        self.bio_rx_queue = queue.Queue()
-        self.bio_disp_queue = queue.Queue()
-
-        ### Make Connections
+        # Enable Logging
         self._connect_logging()
 
     def _init_ui(self):
@@ -202,6 +188,12 @@ class Viewer(QMainWindow):
         self.plot_grid.logEvent.connect(self.log_display_panel.log_message)
         for _, panel in enumerate(self.usrp_config_panel):
             panel.logEvent.connect(self.log_display_panel.log_message)
+        for handler in self.device_handlers.values():
+            handler.logEvent.connect(self.log_display_panel.log_message)
+
+    def _connect_display(self):
+        for handler in self.device_handlers.values():
+            handler.dataReady.connect(self.plot_grid.add_new_data)
 
     def start_initialization(self):
         # Disable button during initialization
@@ -220,26 +212,6 @@ class Viewer(QMainWindow):
         for handler in self.device_handlers.values():
             handler.run()
 
-        # Create saving thread
-        self.save_thread = UsrpProcessor(
-            exp_config=self.exp_config,
-            usrp_config=self.usrp_config,
-            rx_queues=self.usrp_rx_queue,
-            disp_queue=self.usrp_disp_queue,
-            running=self.running_status.value,
-            saving=self.saving_status,
-        )
-        self.save_thread.logEvent.connect(self.log_display_panel.log_message)
-
-        # Create display thread
-        self.display_thread = DisplayWorker(
-            config=self.exp_config,
-            disp_queues={"usrp": self.usrp_disp_queue, "biopac": self.bio_disp_queue},
-            running=self.running_status.value,
-        )
-        self.display_thread.logEvent.connect(self.log_display_panel.log_message)
-        self.display_thread.dataReady.connect(self.plot_grid.add_new_data)
-
         # Create instruction thread
         if self.enable_instructions:
             self.instructions_thread = InstructionWorker(config=self.exp_config)
@@ -251,12 +223,6 @@ class Viewer(QMainWindow):
                 self.log_display_panel.log_message
             )
             self.instructions_thread.start()
-
-        # Start all threads together
-        if self.bio_rx_thread is not None:
-            self.bio_rx_thread.start()
-        self.save_thread.start()
-        self.display_thread.start()
 
         # Update UI
         self.update_buttons()
@@ -272,10 +238,6 @@ class Viewer(QMainWindow):
         # Stop instruction
         if self.instructions_thread is not None:
             self.instructions_thread.stop()
-
-        # Stop display thread
-        if self.display_thread is not None:
-            self.display_thread.stop()
 
         # Update UI
         self.update_buttons()

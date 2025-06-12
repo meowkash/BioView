@@ -5,7 +5,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from bioview.utils import load_mpdev_dll, wrap_result_code
 
 
-class Controller(QThread):
+class ConnectWorker(QThread):
     initSucceeded = pyqtSignal(object)
     initFailed = pyqtSignal(str)
     logEvent = pyqtSignal(str, str)

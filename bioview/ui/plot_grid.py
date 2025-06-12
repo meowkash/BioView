@@ -1,11 +1,11 @@
 import queue
-import numpy as np
 from collections import deque
-import pyqtgraph as pg
 
-from PyQt6.QtWidgets import QWidget, QGridLayout
-from PyQt6.QtCore import pyqtSignal, QTimer, QEvent
+import numpy as np
+import pyqtgraph as pg
+from PyQt6.QtCore import QEvent, QTimer, pyqtSignal
 from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtWidgets import QGridLayout, QWidget
 
 from bioview.utils import get_color_by_idx
 
@@ -49,7 +49,9 @@ class PlotManager:
 
     def _init_plot(self):
         # Calculate number of points for the display duration
-        self.num_points = int(self.display_duration * self.config.get_disp_freq())
+        self.num_points = int(
+            self.display_duration * self.config.get_disp_freq("multi_usrp")
+        )
 
         # Initialize buffer with zeros - deque with fixed maxlen for sliding window
         self.buffer = deque([0.0] * self.num_points, maxlen=self.num_points)

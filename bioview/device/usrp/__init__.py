@@ -5,26 +5,26 @@ from bioview.device.common import DisplayWorker, SaveWorker
 from bioview.types import ConnectionStatus
 from bioview.utils import get_channel_map
 
-from .connect import ConnectWorker as UsrpController
-from .process import ProcessWorker as UsrpProcessor
-from .receive import ReceiveWorker as UsrpReceiver
-from .transmit import TransmitWorker as UsrpTransmitter
+from .connect import ConnectWorker
+from .process import ProcessWorker
+from .receive import ReceiveWorker
+from .transmit import TransmitWorker
 
 
 class MultiUsrpDevice(Device):
-    def __init__(self, config, save=False, display=False):
-        super().__init__(device_type="multi_usrp")
+    def __init__(self, config, exp_config, save=False):
+        super().__init__(device_type="multi_usrp", exp_config=exp_config, save=save)
         self.config = config
 
         self.handler = {}
         self.state = {}
 
-        self.save = save
-        self.display = display
+        self.if_filter_bw = []
 
         for cfg in config:
             dev_handler = UsrpDevice(config=cfg)
             dev_name = dev_handler.name
+            self.if_filter_bw.extend(cfg.get_filter_bw())
             dev_handler.logEvent.connect(self._log_message)
             dev_handler.connectionStateChanged.connect(
                 lambda value: self._on_state_update(device=dev_name, new_state=value)
@@ -33,10 +33,8 @@ class MultiUsrpDevice(Device):
             self.handler[dev_name] = dev_handler
             self.state[dev_name] = ConnectionStatus.DISCONNECTED
 
-        self.threads = {}
-
         self.channel_mapping = None
-        self.data_mapping = {}
+
         self._generate_channel_mapping()
 
     def _generate_channel_mapping(self):
@@ -67,7 +65,7 @@ class MultiUsrpDevice(Device):
             for tidx in range(len(ch_map[ridx])):
                 label = ch_map[ridx][tidx]
                 if label != "":
-                    self.data_mapping[label] = ("usrp", counter)
+                    self.data_mapping[label] = counter
                     counter += 1
 
         # [4] Add usrp Parameters
@@ -102,20 +100,24 @@ class MultiUsrpDevice(Device):
             handler.run()
 
         # Start processing
-        self.threads["Process"] = UsrpProcessor(
-            exp_config=self.exp_config,
-            usrp_config=self.config,
-            rx_queues=[x.rx_queue for x in self.handler],
-            disp_queue=self.disp_queue,
+        self.threads["Process"] = ProcessWorker(
+            channel_ifs=self.channel_ifs,
+            if_filter_bw=self.if_filter_bw,
+            samp_rate=self.exp_config.samp_rate[self.device_type],
+            save_ds=self.exp_config.save_ds[self.device_type],
+            channel_mapping=self.channel_mapping,
+            data_mapping=self.data_mapping,
+            rx_queues=[x.rx_queue for x in self.handler.values()],
+            save_queue=self.save_queue,
+            disp_queue=self.display_queue,
             running=True,
-            saving=self.saving_status,
         )
 
-        # Connect saving
-        # self.threads['Save'] = SaveWorker()
-
-        # # Connect display
-        # self.threads['Display'] = DisplayWorker()
+        # Start saving
+        if self.exp_config.save_phase:
+            self.num_channels = 2 * len(self.data_mapping)
+        else:
+            self.num_channels = len(self.data_mapping)
 
     def stop(self):
         for handler in self.handler.values():
@@ -127,13 +129,13 @@ class MultiUsrpDevice(Device):
 
 class UsrpDevice(Device):
     def __init__(self, config):
-        super().__init__(device_type="usrp")
+        super().__init__(device_type="usrp", exp_config=None, save=False)
         self.config = config
         self.name = config.get_param("device_name")
         self.rx_queue = queue.Queue()
 
     def connect(self):
-        self.connect_thread = UsrpController(self.config)
+        self.connect_thread = ConnectWorker(self.config)
         self.connect_thread.initSucceeded.connect(
             lambda usrp, tx_streamer, rx_streamer: self._on_connect_success(
                 usrp=usrp, tx_streamer=tx_streamer, rx_streamer=rx_streamer
@@ -156,12 +158,12 @@ class UsrpDevice(Device):
             return
 
         # Create transmitter thread
-        self.threads["Transmit"] = UsrpTransmitter(
+        self.threads["Transmit"] = TransmitWorker(
             config=self.config, usrp=self.handler, tx_streamer=self.tx_streamer
         )
 
         # Create receiver thread
-        self.threads["Receive"] = UsrpReceiver(
+        self.threads["Receive"] = ReceiveWorker(
             usrp=self.handler,
             config=self.config,
             rx_streamer=self.rx_streamer,
@@ -190,12 +192,12 @@ class UsrpDevice(Device):
         self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
 
 
-def get_device_object(config):
+def get_device_object(config, exp_config):
     if isinstance(config, tuple) or isinstance(config, list):
-        return MultiUsrpDevice(config=config)
+        return MultiUsrpDevice(config=config, exp_config=exp_config)
     else:
         cfg_list = [config]
-        return MultiUsrpDevice(config=cfg_list)
+        return MultiUsrpDevice(config=cfg_list, exp_config=exp_config)
 
 
 __all__ = ["MultiUsrpDevice", "get_device_object"]

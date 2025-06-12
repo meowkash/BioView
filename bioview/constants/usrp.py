@@ -5,14 +5,15 @@ FILLING_TIME = 0.35
 
 SAVE_BUFFER_SIZE = 20  # This is a good balance between real time display and spikes
 
-""" 
-We make some general assumptions, specifically - 
-* Each device has two working channels 
-* Each device uses the default data formats 
-* Each device uses internal timing reference and clock 
+"""
+We make some general assumptions, specifically -
+* Each device has two working channels
+* Each device uses the default data formats
+* Each device uses internal timing reference and clock
 * Each device sends waveforms of amplitude 1
 """
 BASE_USRP_CONFIG = {
+    "samp_rate": 1e6,
     "tx_amplitude": [1, 1],
     "rx_channels": [0, 1],
     "tx_channels": [0, 1],
@@ -23,4 +24,6 @@ BASE_USRP_CONFIG = {
     "clock": "internal",
     "pps": "internal",
     "if_filter_bw": 5e3,
+    "save_ds": 100,
+    "disp_ds": 10,
 }

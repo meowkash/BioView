@@ -1,6 +1,7 @@
-from .config import Configuration
-from bioview.utils import get_unique_path
 from bioview.constants import BASE_USRP_CONFIG
+from bioview.utils import get_unique_path
+
+from .config import Configuration
 
 
 # A collection of (mostly) device-agnostic configuration parameters
@@ -9,10 +10,10 @@ class ExperimentConfiguration(Configuration):
         self,
         save_dir: str,
         file_name: str,
-        save_ds: int,
-        disp_ds: int,
-        disp_filter_spec: dict,
-        disp_channels: list = None,
+        save_ds: dict,
+        disp_ds: dict,
+        samp_rate: dict,
+        disp_channels: dict = {},
         save_phase: bool = True,
         show_phase: bool = False,
         loop_instructions: bool = True,
@@ -25,13 +26,14 @@ class ExperimentConfiguration(Configuration):
 
         self.save_dir = save_dir
         self.file_name = file_name
+
+        # Common functionality
         self.save_ds = save_ds
         self.disp_ds = disp_ds
-        self.disp_filter_spec = disp_filter_spec
+        self.samp_rate = samp_rate
         self.disp_channels = disp_channels
 
         # USRP-Specific Configuration Variables
-        self.if_filter_bw = kwargs.get("if_filter_bw", BASE_USRP_CONFIG["if_filter_bw"])
         self.save_phase = save_phase
         self.show_phase = show_phase
 
@@ -53,12 +55,27 @@ class ExperimentConfiguration(Configuration):
     def get_save_path(self, sensor="usrp"):
         return get_unique_path(self.save_dir, f"{self.file_name}_{sensor}.h5")
 
-    def get_disp_freq(self):
-        return self.get_param("samp_rate", 1e6) / (self.save_ds * self.disp_ds)
+    def get_disp_freq(self, sensor):
+        if sensor in self.samp_rate.keys():
+            samp_rate = self.samp_rate[sensor]
+        else:
+            return
+
+        if sensor in self.save_ds.keys():
+            save_ds = self.save_ds[sensor]
+        else:
+            return
+
+        if sensor in self.disp_ds.keys():
+            disp_ds = self.save_ds[sensor]
+        else:
+            return
+
+        return samp_rate / (save_ds * disp_ds)
 
     def get_display_channels(self, device):
         channels = []
-        for idx, ch_key in enumerate(self.disp_channels):
+        for _, ch_key in enumerate(self.disp_channels):
             ch_meta = self.data_mapping[ch_key]
             if ch_meta[0] == device:
                 channels.append(ch_meta[1])

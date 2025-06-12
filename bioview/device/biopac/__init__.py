@@ -4,19 +4,17 @@ from bioview.device import Device
 from bioview.types import ConnectionStatus
 
 # Core functionality that should always be available
-from .controller import Controller as BiopacController
-from .processor import ProcessWorker as BiopacProcessor
-from .receiver import ReceiveWorker as BiopacReceiver
+from .connect import ConnectWorker
+from .process import ProcessWorker
+from .receive import ReceiveWorker
 
 
 class BiopacDevice(Device):
-    def __init__(self, config):
-        super().__init__(device_type="biopac")
+    def __init__(self, config, exp_config, save=False, display=False):
+        super().__init__(device_type="biopac", exp_config=exp_config, save=save)
         self.config = config
 
         self.rx_queue = queue.Queue()
-
-        self.data_mapping = {}
 
         self._generate_channel_mapping()
 
@@ -28,7 +26,7 @@ class BiopacDevice(Device):
             self.config.absolute_channel_nums[idx] = idx
 
     def connect(self):
-        self.connect_thread = BiopacController(self.config)
+        self.connect_thread = ConnectWorker(self.config)
         self.connect_thread.initSucceeded.connect(self._on_connect_success)
 
         return super().connect()
@@ -38,17 +36,12 @@ class BiopacDevice(Device):
             self.logEvent.emit("error", "No BIOPAC object found")
             return
 
-        # Create receiver thread
-        self.threads["Receive"] = BiopacReceiver(
+        # Start receiving
+        self.threads["Receive"] = ReceiveWorker(
             biopac=self.handler, config=self.config, rx_queue=self.rx_queue
         )
 
-        # Create save thread
-        # self.threads['Save']
-
-        # Create display thread
-        # self.threads['Display']
-        # self.threads['Display'].dataReady.connect(self.update_display)
+        self.num_channels = len(self.config.channels)
 
         # Start threads
         super().run()
@@ -66,11 +59,11 @@ class BiopacDevice(Device):
         self.handler = biopac
 
         # Update status bar
-        self.connectionState.emit(ConnectionStatus.CONNECTED)
+        self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
 
 
-def get_device_object(config):
-    return BiopacDevice(config=config)
+def get_device_object(config, exp_config):
+    return BiopacDevice(config=config, exp_config=exp_config)
 
 
 __all__ = ["BiopacDevice", "get_device_object"]

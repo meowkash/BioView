@@ -1,21 +1,21 @@
 import qtawesome as qta
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import (
-    QGridLayout,
-    QLabel,
-    QGroupBox,
-    QFileDialog,
-    QSpinBox,
-    QListView,
     QComboBox,
-    QLineEdit,
-    QPushButton,
-    QHBoxLayout,
     QDoubleSpinBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListView,
+    QPushButton,
+    QSpinBox,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QEvent
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
 
-from bioview.types import ConnectionStatus, RunningStatus, ExperimentConfiguration
+from bioview.types import ConnectionStatus, ExperimentConfiguration, RunningStatus
 from bioview.utils import get_qcolor
 
 
@@ -158,20 +158,20 @@ class ExperimentSettingsPanel(QGroupBox):
         layout.addLayout(picker_layout, row, 1)
         row += 1
 
-        # Downsampling ratios
-        for key, val in {"save_ds": "Saving", "disp_ds": "Display"}.items():
-            layout.addWidget(QLabel(f"{val} Downsample"), row, 0)
-            widget = QDoubleSpinBox()
-            widget.setRange(1, 1000)
-            widget.setDecimals(0)
-            widget.setSingleStep(10)
-            widget.setValue(getattr(self.config, key))
-            # Connect to parameter changer
-            widget.textChanged.connect(
-                lambda value, key=key: self.update_param(param_name=key, value=value)
-            )
-            layout.addWidget(widget, row, 1)
-            row += 1
+        # # Downsampling ratios
+        # for key, val in {"save_ds": "Saving", "disp_ds": "Display"}.items():
+        #     layout.addWidget(QLabel(f"{val} Downsample"), row, 0)
+        #     widget = QDoubleSpinBox()
+        #     widget.setRange(1, 1000)
+        #     widget.setDecimals(0)
+        #     widget.setSingleStep(10)
+        #     widget.setValue(getattr(self.config, key))
+        #     # Connect to parameter changer
+        #     widget.textChanged.connect(
+        #         lambda value, key=key: self.update_param(param_name=key, value=value)
+        #     )
+        #     layout.addWidget(widget, row, 1)
+        #     row += 1
 
         # Display Time Length
         layout.addWidget(QLabel("Display Time (s)"), row, 0)

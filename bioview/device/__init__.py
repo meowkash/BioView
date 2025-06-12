@@ -10,15 +10,15 @@ def _check_type(obj, typ):
     return isinstance(obj, typ)
 
 
-def get_device_object(config):
+def get_device_object(config, exp_config):
     if _check_type(config, UsrpConfiguration):
         from .usrp import get_device_object
 
-        return get_device_object(config)
+        return get_device_object(config=config, exp_config=exp_config)
     elif _check_type(config, BiopacConfiguration):
         from .biopac import get_device_object
 
-        return get_device_object(config)
+        return get_device_object(config=config, exp_config=exp_config)
     else:
         return None
 

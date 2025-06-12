@@ -1,20 +1,38 @@
-from PyQt6.QtCore import QThread
+import queue
 
-from bioview.types import ExperimentConfiguration
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from bioview.utils import init_save_file, update_save_file
 
 
 class SaveWorker(QThread):
+    logEvent = pyqtSignal(str, str)
+
     def __init__(
-        self, config: ExperimentConfiguration, running: bool = False, parent=None
+        self, save_path, data_queue, num_channels, running: bool = False, parent=None
     ):
         super().__init__(parent)
-
-        self.config = config
         self.running = running
 
+        # Load output file
+        self.save_path = save_path
+        self.data_queue = data_queue
+
+        if self.saving:
+            init_save_file(file_path=self.save_path, num_channels=num_channels)
+
     def run(self):
+        if self.data_queue is None:
+            return
+
         while self.running:
-            pass
+            try:
+                data = self.data_queue.get()
+            except queue.Empty:
+                self.logEvent.emit("debug", "No data to save")
+                continue
+
+            update_save_file(self.save_path, data)
 
     def stop(self):
         self.running = False
