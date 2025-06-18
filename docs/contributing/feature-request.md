@@ -1,4 +1,4 @@
-# ✏️ Requesting a Change
+# ✏️ Feature Request/Change
 
 To propose a new feature, enhancement, or API change, please follow these steps:
 

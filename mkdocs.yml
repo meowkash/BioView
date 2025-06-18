@@ -161,8 +161,10 @@ nav:
     - usage/index.md
     - Basic Demo: usage/basic-demo.md
   - Contributing:
-    - contributing/index.md
-    - Reporting a bug: contributing/reporting-a-bug.md
-    - Reporting a docs issue: contributing/reporting-a-docs-issue.md
-    - Requesting a change: contributing/requesting-a-change.md
-    - Making a pull request: contributing/making-a-pull-request.md
+    - Guidelines: 
+      - Code Style: contributing/code-style.md
+      - Build Instructions: contributing/build-instructions.md 
+    - Reporting Issues: 
+      - Bugs: contributing/bug-report.md
+      - Documentation Issue: contributing/docs-issue.md
+      - Feature Change/Request: contributing/feature-request.md
