@@ -1,7 +1,8 @@
 import queue
 
 from bioview.device import Device
-from bioview.types import ConnectionStatus
+from bioview.device.common import DisplayWorker, SaveWorker
+from bioview.types import BiopacConfiguration, ConnectionStatus, DataSource
 
 # Core functionality that should always be available
 from .connect import ConnectWorker
@@ -10,19 +11,32 @@ from .receive import ReceiveWorker
 
 
 class BiopacDevice(Device):
-    def __init__(self, config, exp_config, save=False, display=False):
-        super().__init__(device_type="biopac", exp_config=exp_config, save=save)
-        self.config = config
+    def __init__(
+        self,
+        device_name,
+        config: BiopacConfiguration,
+        save: bool = False,
+        save_path=None,
+        display=False,
+    ):
+        super().__init__(
+            device_name=device_name,
+            config=config,
+            device_type="biopac",
+            save=save,
+            save_path=save_path,
+            display=display,
+        )
 
         self.rx_queue = queue.Queue()
 
-        self._generate_channel_mapping()
-
-    def _generate_channel_mapping(self):
+    def _populate_data_sources(self):
         # Generate channel labels:data queue index mapping alongwith absolute channel numbers
         for idx, _ in enumerate(self.config.channels):
-            label = f"{self.config.device_name}_Ch{idx + 1}"
-            self.data_mapping[label] = ("biopac", idx)
+            label = f"Ch{idx + 1}"
+            source = DataSource(device=self, channel=idx, label=label)
+            self.data_sources.append(source)
+
             self.config.absolute_channel_nums[idx] = idx
 
     def connect(self):
@@ -43,6 +57,24 @@ class BiopacDevice(Device):
 
         self.num_channels = len(self.config.channels)
 
+        # Start saving
+        if self.save and self.save_path is not None:
+            self.threads["Save"] = SaveWorker(
+                save_path=self.save_path,
+                data_queue=self.save_queue,
+                num_channels=self.num_channels,
+                running=True,
+            )
+
+        # Create display thread
+        if self.display and self.display_sources is not None:
+            self.threads["Display"] = DisplayWorker(
+                config=self.config,
+                data_queue=self.display_queue,
+                running=True,
+            )
+            self.threads["Display"].dataReady.connect(self._update_display)
+
         # Start threads
         super().run()
 
@@ -62,8 +94,10 @@ class BiopacDevice(Device):
         self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
 
 
-def get_device_object(config, exp_config):
-    return BiopacDevice(config=config, exp_config=exp_config)
+def get_device_object(device_name, config, save=False, save_path=None):
+    return BiopacDevice(
+        device_name=device_name, config=config, save=save, save_path=save_path
+    )
 
 
 __all__ = ["BiopacDevice", "get_device_object"]

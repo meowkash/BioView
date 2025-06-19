@@ -13,7 +13,6 @@ We make some general assumptions, specifically -
 * Each device sends waveforms of amplitude 1
 """
 BASE_USRP_CONFIG = {
-    "samp_rate": 1e6,
     "tx_amplitude": [1, 1],
     "rx_channels": [0, 1],
     "tx_channels": [0, 1],

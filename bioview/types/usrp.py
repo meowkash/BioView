@@ -3,14 +3,66 @@ from bioview.constants import BASE_USRP_CONFIG
 from .config import Configuration
 
 
+class MultiUsrpConfiguration(Configuration):
+    """
+    Handles an arbitrary number of USRP devices, keeping a clear distinction between the common variables and non-common variables
+    """
+
+    def __init__(
+        self,
+        samp_rate: int,
+        devices: list[dict],
+        save_ds: int = BASE_USRP_CONFIG["save_ds"],
+        save_iq: bool = False,
+        save_imaginary: bool = True,
+        disp_ds: int = BASE_USRP_CONFIG["disp_ds"],
+        disp_imaginary: bool = False,
+        display_sources: list = [],
+    ):
+        super().__init__()
+        # Store common configuration values
+        self.samp_rate = samp_rate
+        self.save_ds = save_ds
+        self.save_iq = save_iq
+        self.save_imaginary = save_imaginary
+        self.disp_ds = disp_ds
+        self.disp_imaginary = disp_imaginary
+        self.display_sources = display_sources
+
+        # Initialize per-device configuration
+        self.devices = {}
+        for device in devices:
+            if not isinstance(device, dict):
+                raise ValueError(
+                    f"Expected device configuration to be a dict but got {type(device)} instead"
+                )
+            self.devices[device["device_name"]] = UsrpConfiguration(**device)
+
+            # Copy necessary common configuration values to all devices
+            self.devices[device["device_name"]].samp_rate = samp_rate
+
+    def get_disp_freq(self):
+        return self.samp_rate / (self.save_ds * self.disp_ds)
+
+
 class UsrpConfiguration(Configuration):
     def __init__(
         self,
         device_name: str,
         if_freq: list,
-        rx_gain: list,
         tx_gain: list,
+        rx_gain: list,
         carrier_freq: int,
+        if_filter_bw=BASE_USRP_CONFIG["if_filter_bw"],
+        tx_amplitude=BASE_USRP_CONFIG["tx_amplitude"],
+        tx_channels=BASE_USRP_CONFIG["tx_channels"],
+        rx_channels=BASE_USRP_CONFIG["rx_channels"],
+        tx_subdev=BASE_USRP_CONFIG["tx_subdev"],
+        rx_subdev=BASE_USRP_CONFIG["rx_subdev"],
+        cpu_format=BASE_USRP_CONFIG["cpu_format"],
+        wire_format=BASE_USRP_CONFIG["wire_format"],
+        clock=BASE_USRP_CONFIG["clock"],
+        pps=BASE_USRP_CONFIG["pps"],
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -22,21 +74,19 @@ class UsrpConfiguration(Configuration):
         self.tx_gain = tx_gain
         self.carrier_freq = carrier_freq
 
-        self.save_ds = kwargs.get("save_ds", BASE_USRP_CONFIG["save_ds"])
-        self.display_ds = kwargs.get("disp_ds", BASE_USRP_CONFIG["disp_ds"])
-        self.if_filter_bw = kwargs.get("if_filter_bw", BASE_USRP_CONFIG["if_filter_bw"])
-        self.samp_rate = kwargs.get("samp_rate", BASE_USRP_CONFIG["samp_rate"])
+        # Default values
+        self.if_filter_bw = if_filter_bw
 
         # Add basic configuration
-        self.tx_amplitude = kwargs.get("tx_amplitude", BASE_USRP_CONFIG["tx_amplitude"])
-        self.rx_channels = kwargs.get("rx_channels", BASE_USRP_CONFIG["rx_channels"])
-        self.tx_channels = kwargs.get("tx_channels", BASE_USRP_CONFIG["tx_channels"])
-        self.rx_subdev = kwargs.get("rx_subdev", BASE_USRP_CONFIG["rx_subdev"])
-        self.tx_subdev = kwargs.get("tx_subdev", BASE_USRP_CONFIG["tx_subdev"])
-        self.cpu_format = kwargs.get("cpu_format", BASE_USRP_CONFIG["cpu_format"])
-        self.wire_format = kwargs.get("wire_format", BASE_USRP_CONFIG["wire_format"])
-        self.clock = kwargs.get("clock", BASE_USRP_CONFIG["clock"])
-        self.pps = kwargs.get("pps", BASE_USRP_CONFIG["pps"])
+        self.tx_amplitude = tx_amplitude
+        self.rx_channels = rx_channels
+        self.tx_channels = tx_channels
+        self.rx_subdev = rx_subdev
+        self.tx_subdev = tx_subdev
+        self.cpu_format = cpu_format
+        self.wire_format = wire_format
+        self.clock = clock
+        self.pps = pps
 
         # Set-up default absolute channel mapping, assuming single device.
         # This assumes that Tx/Rx are always used in pairs

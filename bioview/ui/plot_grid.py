@@ -7,6 +7,7 @@ from PyQt6.QtCore import QEvent, QTimer, pyqtSignal
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QGridLayout, QWidget
 
+from bioview.types import DataSource
 from bioview.utils import get_color_by_idx
 
 
@@ -16,7 +17,7 @@ class PlotManager:
         config,
         color: str,
         display_duration: float,
-        data_src: str = "",
+        data_src: DataSource = None,
         xlabel: str = "Time (s)",
         ylabel: str = "Amplitude",
     ):
@@ -48,10 +49,12 @@ class PlotManager:
         self._init_plot()
 
     def _init_plot(self):
-        # Calculate number of points for the display duration
-        self.num_points = int(
-            self.display_duration * self.config.get_disp_freq("multi_usrp")
-        )
+        # Calculate number of points for the display duration -
+        # This will be recalculated if device handler for the plot changes
+        if self.data_src is None:
+            self.num_points = int(self.display_duration * 10)
+        else:
+            self.num_points = int(self.display_duration * self.data_src.get_disp_freq())
 
         # Initialize buffer with zeros - deque with fixed maxlen for sliding window
         self.buffer = deque([0.0] * self.num_points, maxlen=self.num_points)
@@ -67,7 +70,7 @@ class PlotManager:
         # Set ranges correctly
         self.widget.setXRange(0, self.display_duration, padding=0)
 
-    def update_data_source(self, data_src: str = ""):
+    def update_data_source(self, data_src: DataSource = None):
         self.widget.setTitle(data_src)
         self.data_src = data_src
         self._init_plot()
@@ -230,8 +233,8 @@ class PlotGrid(QWidget):
 
         self.init_grid()
 
-    def add_channel(self, channel):
-        if channel in self.selected_channels.keys():
+    def add_source(self, source):
+        if source in self.selected_channels.keys():
             self.logEvent.emit(
                 "debug", "Unable to add channel as it is already being plotted"
             )
@@ -250,14 +253,14 @@ class PlotGrid(QWidget):
             return False
 
         plot_obj = self.plots[row][col]
-        plot_obj.update_data_source(channel)
+        plot_obj.update_data_source(source)
 
         # Update selected channel mapping
-        self.selected_channels[channel] = {"plot": plot_obj, "loc": (row, col)}
+        self.selected_channels[source] = {"plot": plot_obj, "loc": (row, col)}
 
         return True
 
-    def remove_channel(self, channel):
+    def remove_source(self, channel):
         if channel not in self.selected_channels.keys():
             self.logEvent.emit(
                 "debug", "Unable to remove channel as it is not being plotted"
@@ -276,12 +279,12 @@ class PlotGrid(QWidget):
 
         return True
 
-    def add_new_data(self, data):
+    def add_new_data(self, data, source):
         for channel_idx in range(np.shape(data)[0]):
-            if channel_idx >= len(self.config.disp_channels):
+            if channel_idx >= len(self.config.display_sources):
                 break
 
-            channel_key = self.config.disp_channels[channel_idx]
+            channel_key = self.config.display_sources[channel_idx]
             if channel_key not in self.selected_channels.keys():
                 continue
 

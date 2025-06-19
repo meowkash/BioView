@@ -29,3 +29,6 @@ class BiopacConfiguration(Configuration):
     def get_channels(self):
         # Since the API expects 16 channels, ensure we always pad to return in the appropriate format
         return self.channels + [0] * (16 - len(self.channels))
+
+    def get_disp_freq(self):
+        return self.samp_rate

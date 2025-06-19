@@ -3,7 +3,6 @@ from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import (
     QComboBox,
-    QDoubleSpinBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -15,7 +14,12 @@ from PyQt6.QtWidgets import (
     QSpinBox,
 )
 
-from bioview.types import ConnectionStatus, ExperimentConfiguration, RunningStatus
+from bioview.types import (
+    ConnectionStatus,
+    DataSource,
+    ExperimentConfiguration,
+    RunningStatus,
+)
 from bioview.utils import get_qcolor
 
 
@@ -36,7 +40,7 @@ class CheckableListView(QListView):
 
 
 class CheckableComboBox(QComboBox):
-    selectionChanged = pyqtSignal(str, str)
+    selectionChanged = pyqtSignal(str, DataSource)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -50,41 +54,62 @@ class CheckableComboBox(QComboBox):
         self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.clearEditText()
 
-    def addItem(self, text: str, checked=False):
+    def addItem(self, source: DataSource, checked=False):
+        """Add a DataSource item to the combo box"""
+        text = source.label
         item = QStandardItem(text)
         item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
         item.setData(
             Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked,
             Qt.ItemDataRole.CheckStateRole,
         )
+        # Store the DataSource object in the item's UserRole
+        item.setData(source, Qt.ItemDataRole.UserRole)
         self.model().appendRow(item)
         if checked:
-            self.selectionChanged.emit("add", text)
+            self.selectionChanged.emit("add", source)
 
     def toggle_item(self, item: QStandardItem):
+        """Toggle the check state of an item and emit the appropriate signal"""
+        source = item.data(Qt.ItemDataRole.UserRole)
         if item.checkState() == Qt.CheckState.Checked:
-            self.selectionChanged.emit("remove", item.text())
+            item.setCheckState(Qt.CheckState.Unchecked)
+            self.selectionChanged.emit("remove", source)
         else:
             item.setCheckState(Qt.CheckState.Checked)
-            self.selectionChanged.emit("add", item.text())
+            self.selectionChanged.emit("add", source)
+        self.update_line_text()
 
-    def select_channel(self, text: str):
+    def select_source(self, source: DataSource):
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
-            if item.text() == text and item.checkState() != Qt.CheckState.Checked:
+            item_source = item.data(Qt.ItemDataRole.UserRole)
+            if item_source == source and item.checkState() != Qt.CheckState.Checked:
                 item.setCheckState(Qt.CheckState.Checked)
                 self.update_line_text()
                 break
 
-    def unselect_channel(self, text: str):
+    def unselect_source(self, source: DataSource):
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
-            if item.text() == text and item.checkState() != Qt.CheckState.Unchecked:
+            item_source = item.data(Qt.ItemDataRole.UserRole)
+            if item_source == source and item.checkState() != Qt.CheckState.Unchecked:
                 item.setCheckState(Qt.CheckState.Unchecked)
                 self.update_line_text()
                 break
 
     def checkedItems(self):
+        """Return list of checked DataSource objects"""
+        checked_sources = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                source = item.data(Qt.ItemDataRole.UserRole)
+                checked_sources.append(source)
+        return checked_sources
+
+    def checkedItemTexts(self):
+        """Return list of checked source names"""
         return [
             self.model().item(i).text()
             for i in range(self.model().rowCount())
@@ -92,8 +117,9 @@ class CheckableComboBox(QComboBox):
         ]
 
     def update_line_text(self):
-        checked = self.checkedItems()
-        self.lineEdit().setText(", ".join(checked) if checked else "")
+        """Update the line edit text with checked source names"""
+        checked_texts = self.checkedItemTexts()
+        self.lineEdit().setText(", ".join(checked_texts) if checked_texts else "")
 
     def eventFilter(self, source, event):
         if event.type() == QEvent.Type.MouseButtonPress:
@@ -108,8 +134,8 @@ class ExperimentSettingsPanel(QGroupBox):
     logEvent = pyqtSignal(str, str)
     timeWindowChanged = pyqtSignal(int)
     gridLayoutChanged = pyqtSignal(int, int)
-    addChannelRequested = pyqtSignal(str)
-    removeChannelRequested = pyqtSignal(str)
+    addChannelRequested = pyqtSignal(object)  # Changed to emit DataSource object
+    removeChannelRequested = pyqtSignal(object)  # Changed to emit DataSource object
 
     def __init__(self, config: ExperimentConfiguration, parent=None):
         super().__init__("Experiment Settings", parent)
@@ -158,21 +184,6 @@ class ExperimentSettingsPanel(QGroupBox):
         layout.addLayout(picker_layout, row, 1)
         row += 1
 
-        # # Downsampling ratios
-        # for key, val in {"save_ds": "Saving", "disp_ds": "Display"}.items():
-        #     layout.addWidget(QLabel(f"{val} Downsample"), row, 0)
-        #     widget = QDoubleSpinBox()
-        #     widget.setRange(1, 1000)
-        #     widget.setDecimals(0)
-        #     widget.setSingleStep(10)
-        #     widget.setValue(getattr(self.config, key))
-        #     # Connect to parameter changer
-        #     widget.textChanged.connect(
-        #         lambda value, key=key: self.update_param(param_name=key, value=value)
-        #     )
-        #     layout.addWidget(widget, row, 1)
-        #     row += 1
-
         # Display Time Length
         layout.addWidget(QLabel("Display Time (s)"), row, 0)
         time_layout = QHBoxLayout()
@@ -199,7 +210,7 @@ class ExperimentSettingsPanel(QGroupBox):
         self.cols_input.setRange(1, 3)
         self.cols_input.setValue(2)
         self.cols_input.valueChanged.connect(self.update_grid)
-        self.rows_input.setEnabled(True)
+        self.cols_input.setEnabled(True)
         grid_layout.addWidget(self.cols_input)
 
         layout.addLayout(grid_layout, row, 1)
@@ -207,12 +218,13 @@ class ExperimentSettingsPanel(QGroupBox):
 
         # Channel selection
         layout.addWidget(QLabel("Plot Sources"), row, 0)
-        self.channel_combo = CheckableComboBox()
-        for x in self.config.data_mapping.keys():
-            self.channel_combo.addItem(str(x))
-        self.channel_combo.selectionChanged.connect(self.request_channel_update)
+        self.plot_source = CheckableComboBox()
+        # Assuming available_channels contains DataSource objects
+        for source in self.config.available_channels:
+            self.plot_source.addItem(source)
+        self.plot_source.selectionChanged.connect(self.request_channel_update)
 
-        layout.addWidget(self.channel_combo, row, 1)
+        layout.addWidget(self.plot_source, row, 1)
 
         self.setLayout(layout)
 
@@ -231,7 +243,8 @@ class ExperimentSettingsPanel(QGroupBox):
     def update_grid(self):
         self.gridLayoutChanged.emit(self.rows_input.value(), self.cols_input.value())
 
-    def request_channel_update(self, action, source):
+    def request_channel_update(self, action: str, source: DataSource):
+        """Handle channel selection changes"""
         if action == "remove":
             self.removeChannelRequested.emit(source)
         elif action == "add":
@@ -239,11 +252,12 @@ class ExperimentSettingsPanel(QGroupBox):
         else:
             return
 
-    def update_channel(self, action, source):
+    def update_source(self, action: str, source: DataSource):
+        """Update channel selection state"""
         if action == "add":
-            self.channel_combo.select_channel(source)
+            self.plot_source.select_source(source)
         elif action == "remove":
-            self.channel_combo.unselect_channel(source)
+            self.plot_source.unselect_source(source)
         else:
             return None
 

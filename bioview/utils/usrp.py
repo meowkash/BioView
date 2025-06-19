@@ -3,10 +3,12 @@ Ref: uhd examples
 """
 
 import time
-import numpy as np
 from datetime import datetime, timedelta
 
+import numpy as np
+
 from bioview.constants import CLOCK_TIMEOUT
+from bioview.types import DataSource
 
 
 def _check_pairing(r_idx, t_idx, rx_cumsum, tx_cumsum, pair_list):
@@ -22,6 +24,7 @@ def _check_pairing(r_idx, t_idx, rx_cumsum, tx_cumsum, pair_list):
 
 
 def get_channel_map(
+    device,
     n_devices: int,
     rx_per_dev: list,
     tx_per_dev: list,
@@ -31,16 +34,17 @@ def get_channel_map(
     """
     Provide base implementations of channel mappings for the following use-cases
     [1] MIMO
-    [2] Balance Signal
+    [2] DPIC
+    [3] Multi-Frequency
     These two modifications are on top of the multi-band pairing
     """
+    data_sources = []
+
     rx_cumsum = np.cumsum(rx_per_dev)
     tx_cumsum = np.cumsum(tx_per_dev)
 
     num_rxs = rx_cumsum[-1]
     num_txs = tx_cumsum[-1]
-
-    channel_map = [["" for _ in range(num_txs)] for _ in range(num_rxs)]
 
     if balance:
         rx_enabled = [True if r % 2 == 0 else False for r in range(2 * n_devices)]
@@ -50,6 +54,7 @@ def get_channel_map(
         tx_enabled = [True for _ in range(num_txs)]
 
     rx_ctr = 1
+    ch_ctr = 0
 
     for r_idx, rx_state in enumerate(rx_enabled):
         if not rx_state:
@@ -63,13 +68,19 @@ def get_channel_map(
             if multi_pairs is None or _check_pairing(
                 r_idx, t_idx, rx_cumsum, tx_cumsum, multi_pairs
             ):
-                channel_map[r_idx][t_idx] = f"Tx{tx_ctr}Rx{rx_ctr}"
+                source = DataSource(
+                    device=device, channel=ch_ctr, label=f"Tx{tx_ctr}Rx{rx_ctr}"
+                )
+                source.tx_idx = t_idx
+                source.rx_idx = r_idx
+                data_sources.append(source)
+                ch_ctr += 1
 
             tx_ctr += 1
 
         rx_ctr += 1
 
-    return channel_map
+    return data_sources
 
 
 def setup_pps(usrp, pps, num_mboards):

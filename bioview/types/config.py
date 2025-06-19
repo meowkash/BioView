@@ -6,6 +6,9 @@ class Configuration:
         # Add mutex to make updates thread safe
         self.mutex = QMutex()
 
+    def get_disp_freq(self):
+        return 10  # Dummy output
+
     def set_param(self, param, value):
         self.mutex.lock()
         # Ensure we match types
@@ -17,10 +20,8 @@ class Configuration:
         self.mutex.unlock()
 
     def get_param(self, param, default_value=None):
-        self.mutex.lock()
         try:
             value = getattr(self, param)
-        except:
+        except AttributeError:
             value = default_value
-        self.mutex.unlock()
         return value

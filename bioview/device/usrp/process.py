@@ -3,7 +3,7 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.types import UsrpConfiguration
+from bioview.types import MultiUsrpConfiguration
 from bioview.utils import apply_filter, get_filter
 
 
@@ -12,20 +12,17 @@ class ProcessWorker(QThread):
 
     def __init__(
         self,
+        config: MultiUsrpConfiguration,
         channel_ifs,
         if_filter_bw,
-        samp_rate,
-        save_ds,
-        channel_mapping,
-        data_mapping,
+        data_sources,
         rx_queues: list[queue.Queue],
         save_queue: queue.Queue,
         disp_queue: queue.Queue,
-        running: bool = True,
-        quadrature: bool = True,
+        running: bool = False,
     ):
         super().__init__()
-
+        self.config = config
         self.rx_queues = rx_queues
         self.save_queue = save_queue
         self.disp_queue = disp_queue
@@ -33,13 +30,8 @@ class ProcessWorker(QThread):
         self.running = running
 
         self.channel_ifs = channel_ifs
-        self.samp_rate = samp_rate
-        self.channel_mapping = channel_mapping
-        self.data_mapping = data_mapping
-        self.save_ds = save_ds
 
-        # Allow for saving either IQ or Amp/Phase (default)
-        self.quadrature = quadrature
+        self.data_sources = data_sources
 
         # Load IF filters
         self.if_filts = [
@@ -47,12 +39,10 @@ class ProcessWorker(QThread):
             for idx, freq in enumerate(channel_ifs)
         ]
 
-        # Initialize states for all valid declared channel combinations
-        self.phase_accumulator = {}
-        self.filter_states = {}
-        for ch_key in self.data_mapping.keys():
-            self.phase_accumulator[ch_key] = 0.0
-            self.filter_states[ch_key] = None
+        # Keep track of phase and filter states for all data sources
+        for source in self.data_sources:
+            source.accumulated_phase = 0.0
+            source.filter_state = None
 
     def _load_filter(self, freq: float, bandwidth: float, order: int = 2):
         low_cutoff = freq - bandwidth / 2
@@ -60,43 +50,42 @@ class ProcessWorker(QThread):
 
         filter = get_filter(
             bounds=[low_cutoff, high_cutoff],
-            samp_rate=self.samp_rate,
+            samp_rate=self.config.get_param("samp_rate"),
             btype="band",
             order=order,
         )
         return filter
 
-    def _process_chunk(self, data, filter, if_freq, channel_key):
+    def _process_chunk(self, data, source, filter, if_freq):
         # Early return for empty data
         if len(data) == 0:
             return np.array([]), np.array([])
 
         # Store last sample for continuity checking
-        if hasattr(self, "last_samples") and channel_key in self.last_samples:
+        if hasattr(source, "last_samples"):
             # Check for significant discontinuity
-            discontinuity = abs(data[0] - self.last_samples[channel_key])
+            discontinuity = abs(data[0] - source.last_samples)
             if discontinuity > 3 * np.std(data[: min(100, len(data))]):
                 self.logEvent.emit(
-                    "debug", f"Potential discontinuity detected in {channel_key}"
+                    "debug", f"Potential discontinuity detected in {source.channel}"
                 )
 
         # Store last sample for next buffer
-        if not hasattr(self, "last_samples"):
-            self.last_samples = {}
-        self.last_samples[channel_key] = data[-1]
+        if not hasattr(source, "last_samples"):
+            source.last_samples = data[-1]
 
         # Stateful filtering
-        current_filter_state = self.filter_states.get(channel_key)
+        current_filter_state = source.filter_state
         filt_data, new_filter_state = apply_filter(
             data, filter, zi=current_filter_state
         )
-        self.filter_states[channel_key] = new_filter_state
+        source.filter_state = new_filter_state
 
         # Get the current accumulated phase for this channel
-        current_phase = self.phase_accumulator[channel_key]
+        current_phase = source.accumulated_phase
 
         # Get phase for all samples
-        phase_increment = 2 * np.pi * if_freq / self.samp_rate
+        phase_increment = 2 * np.pi * if_freq / self.config.get_param("samp_rate")
         phases = current_phase + np.arange(len(filt_data)) * phase_increment
 
         # Down-convert from IF to baseband with phase continuity
@@ -104,10 +93,10 @@ class ProcessWorker(QThread):
         baseband_data = filt_data * downconversion
 
         # Update phase accumulator for next buffer (mod 2π to prevent numerical drift)
-        self.phase_accumulator[channel_key] = phases[-1] + phase_increment
+        source.accumulated_phase = phases[-1] + phase_increment
 
         # Downsampling logic
-        step = self.save_ds
+        step = self.config.get_param("save_ds")
         end_idx = len(baseband_data) - step + 1
         num_windows = (end_idx + step - 1) // step  # Calculate the number of windows
 
@@ -121,7 +110,7 @@ class ProcessWorker(QThread):
         window_indices = start_indices[:, np.newaxis] + np.arange(step)
         windows = baseband_data[window_indices]
 
-        if self.quadrature:
+        if self.config.get_param("save_iq"):
             first_comp = np.mean(np.real(windows), axis=1)
             second_comp = np.mean(np.imag(windows), axis=1)
         else:
@@ -132,25 +121,51 @@ class ProcessWorker(QThread):
 
     def _process_save(self, buffer):
         # Use numpy preallocated array for speed
-        num_channels = len(self.data_mapping)
-        save_list = np.empty((num_channels, int(buffer.shape[1] // self.save_ds), 2))
+        num_sources = len(self.data_sources)
+        len_samples = int(buffer.shape[1] // self.config.get_param("save_ds"))
 
-        for r_idx, row in enumerate(self.channel_mapping):
-            x = buffer[r_idx, :]
-            for t_idx, channel_key in enumerate(row):
-                channel_idx = self.data_mapping[channel_key][1]
-                # Pass the channel key for state tracking
-                first_comp, second_comp = self._process_chunk(
-                    data=x,
-                    filter=self.if_filts[t_idx],
-                    if_freq=self.channel_ifs[t_idx],
-                    channel_key=channel_key,
-                )
-                self.logEvent.emit(
-                    "debug", f"Processed channel {channel_key} with index {channel_idx}"
-                )
-                save_list[channel_idx, :, 0] = first_comp
-                save_list[channel_idx, :, 1] = second_comp
+        # We might not always want to save imaginary components
+        if self.config.get_param("save_imaginary"):
+            save_list = np.empty((num_sources, len_samples, 2))
+        else:
+            save_list = np.empty((num_sources, len_samples))
+
+        for source in self.data_sources:
+            data = buffer[source.rx_idx, :]
+            first_comp, second_comp = self._process_chunk(
+                data=data,
+                source=source,
+                filter=self.if_filts[source.tx_idx],
+                if_freq=self.channel_ifs[source.tx_idx],
+            )
+
+            self.logEvent.emit("debug", f"Processed channel {source.channel}")
+
+            if self.config.get_param("save_imaginary"):
+                save_list[source.channel, :, 0] = first_comp
+                save_list[source.channel, :, 1] = second_comp
+            else:
+                save_list[source.channel, :] = first_comp
+
+        # for r_idx, row in enumerate(self.channel_mapping):
+        #     x = buffer[r_idx, :]
+        #     for t_idx, channel_key in enumerate(row):
+        #         channel_idx = self.data_mapping[channel_key]
+        #         source = self.data_sources[]
+        #         # Pass the channel key for state tracking
+        #         first_comp, second_comp = self._process_chunk(
+        #             data=x,
+        #             source=source,
+        #             filter=self.if_filts[t_idx],
+        #             if_freq=self.channel_ifs[t_idx],
+        #             channel_key=channel_key,
+        #         )
+
+        #         if self.config.get_param('save_imaginary'):
+        #             save_list[channel_idx, :, 0] = first_comp
+        #             save_list[channel_idx, :, 1] = second_comp
+        #         else:
+        #             save_list[channel_idx, :] = first_comp
 
         # Return all processed samples
         return save_list
@@ -174,13 +189,22 @@ class ProcessWorker(QThread):
                 if self.save_queue is not None:
                     try:
                         self.save_queue.put(processed)
+                        self.logEvent.emit("debug", "[USRP] Added to save queue")
                     except queue.Full:
                         self.logEvent.emit("debug", "[USRP] Save Queue Full")
 
                 # Add to display queue
                 try:
-                    # TODO: Check for phase here
-                    self.disp_queue.put(processed[:, :, 0])
+                    # If we do not have an imaginary component, simply pass processed data
+                    if self.config.get_param("save_imaginary") is False:
+                        self.disp_queue.put(processed)
+                    else:
+                        # Depending on whether we want to display imaginary or not
+                        if self.config.get_param("disp_iamginary", False):
+                            self.disp_queue.put(processed[:, :, 1])
+                        else:
+                            self.disp_queue.put(processed[:, :, 0])
+                        self.logEvent.emit("debug", "[USRP] Added to display queue")
                 except queue.Full:
                     self.logEvent.emit("debug", "[USRP] Display Queue Full")
 

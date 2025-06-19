@@ -3,27 +3,26 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from bioview.types import Configuration, DataSource
 from bioview.utils import apply_filter, get_filter
 
 
 class DisplayWorker(QThread):
-    dataReady = pyqtSignal(np.ndarray)
+    dataReady = pyqtSignal(np.ndarray, DataSource)
     logEvent = pyqtSignal(str, str)
 
     def __init__(
         self,
+        config: Configuration,
         data_queue: queue.Queue,
-        disp_ds: int = 1,
-        disp_channels: list = [],
-        disp_filter_spec: dict = None,
         running: bool = True,
         parent=None,
     ):
         super().__init__(parent)
-        self.disp_ds = disp_ds
-        self.disp_channels = disp_channels
+        self.config = config
+        self.disp_ds = config.get_param("disp_ds", 1)
 
-        self.disp_filter_spec = disp_filter_spec
+        self.disp_filter_spec = config.get_param("disp_filter_spec", None)
         self.disp_filter = None
         self._load_disp_filter()
 
@@ -31,10 +30,7 @@ class DisplayWorker(QThread):
         self.running = running
 
     def _load_disp_filter(self):
-        if self.disp_filter_spec is None:
-            self.disp_filter = None
-            return
-        else:
+        if self.disp_filter_spec is not None:
             self.disp_filter = get_filter(
                 bounds=self.disp_filter_spec["bounds"],
                 samp_rate=self.disp_filter_spec["samp_rate"],
@@ -47,6 +43,7 @@ class DisplayWorker(QThread):
             self.disp_filter_spec = {}
 
         self.disp_filter_spec[param] = value
+
         # Update filter
         self._load_disp_filter()
 
@@ -62,7 +59,8 @@ class DisplayWorker(QThread):
         self.logEvent.emit("debug", "Display started")
 
         while self.running:
-            if len(self.disp_channels) == 0:
+            self.display_sources = self.config.get_param("display_sources", [])
+            if len(self.display_sources) == 0:
                 continue
 
             try:
@@ -70,11 +68,12 @@ class DisplayWorker(QThread):
                 samples = self.data_queue.get()
 
                 # Only process selected channels
-                disp_ch_idx = [self.data_mapping[key] for key in self.disp_channels]
-                disp_samples = samples[disp_ch_idx, :]
-                processed = self._process(disp_samples)
+                for source in enumerate(self.display_sources):
+                    disp_samples = samples[source.channel, :]
+                    processed = self._process(disp_samples)
 
-                self.dataReady.emit(np.array(processed))
+                    # We send data with sources
+                    self.dataReady.emit(np.array(processed), source)
             except queue.Empty:
                 self.logEvent.emit("error", "Queue Empty")
                 continue

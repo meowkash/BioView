@@ -10,8 +10,13 @@ from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
 from bioview.device import get_device_object
-from bioview.device.common import DisplayWorker, InstructionWorker
-from bioview.types import ConnectionStatus, ExperimentConfiguration, RunningStatus
+from bioview.device.common import InstructionWorker
+from bioview.types import (
+    ConnectionStatus,
+    DataSource,
+    ExperimentConfiguration,
+    RunningStatus,
+)
 from bioview.ui import (
     AnnotateEventPanel,
     AppControlPanel,
@@ -36,26 +41,34 @@ class Viewer(QMainWindow):
         self.exp_config = exp_config
         self.device_config = device_config
 
-        # Create device handlers
-        self.device_handlers = {}
-        for dev_type, dev_cfg in device_config.items():
-            dev_obj = get_device_object(config=dev_cfg, exp_config=exp_config)
-            dev_obj.connectionStateChanged.connect(
-                lambda value: self.update_connection_status(
-                    device=dev_type, state=value
-                )
-            )
-            self.device_handlers[dev_type] = dev_obj
-
-        # Initialize device states
-        self.device_states = {}
-        for dev_type in device_config.keys():
-            self.device_states[dev_type] = ConnectionStatus.DISCONNECTED
+        self.exp_config.available_channels = []
 
         # Track state
         self.connection_status = ConnectionStatus.DISCONNECTED
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False
+
+        # Create device handlers
+        self.device_handlers = {}
+        for dev_name, dev_cfg in device_config.items():
+            dev_obj = get_device_object(
+                device_name=dev_name,
+                config=dev_cfg,
+                save=self.saving_status,
+                exp_config=exp_config,
+            )
+            dev_obj.connectionStateChanged.connect(
+                lambda value: self.update_connection_status(
+                    device=dev_name, state=value
+                )
+            )
+            self.device_handlers[dev_name] = dev_obj
+        self.discover_channels()
+
+        # Initialize device states
+        self.device_states = {}
+        for dev_name in device_config.keys():
+            self.device_states[dev_name] = ConnectionStatus.DISCONNECTED
 
         # Track instruction
         if exp_config.get_param("instruction_type") is None:
@@ -78,9 +91,10 @@ class Viewer(QMainWindow):
 
         # Enable Logging
         self._connect_logging()
+        self._connect_display()
 
     def _init_ui(self):
-        ### Define main wndow
+        # Define main wndow
         self.setWindowTitle("BioView")
         iconDir = (
             Path(__file__).resolve().parent.parent / "docs" / "assets" / "icon.png"
@@ -94,20 +108,21 @@ class Viewer(QMainWindow):
             int(0.2 * width), int(0.1 * height), int(0.6 * width), int(0.8 * height)
         )
 
-        ### Create central widget and main layout
+        # Create central widget and main layout
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        ### Top shelf container
+        # Top shelf container
         top_layout = QHBoxLayout()
 
-        ### All controls are in one container
+        # All controls are in one container
         controls_layout = QVBoxLayout()
 
-        ### Connect/Start/Stop/Balance Signal Buttons
+        # Connect/Start/Stop/Balance Signal Buttons
         self.app_control_panel = AppControlPanel()
         controls_layout.addWidget(self.app_control_panel, stretch=1)
+
         # Connect signal handlers
         self.app_control_panel.connectionInitiated.connect(self.start_initialization)
         self.app_control_panel.startRequested.connect(self.start_recording)
@@ -119,7 +134,7 @@ class Viewer(QMainWindow):
 
         experiment_layout = QHBoxLayout()
 
-        ### Experiment Control Panel
+        # Experiment Control Panel
         self.experiment_settings_panel = ExperimentSettingsPanel(self.exp_config)
         experiment_layout.addWidget(self.experiment_settings_panel, stretch=1)
         # Connect handlers
@@ -130,17 +145,17 @@ class Viewer(QMainWindow):
             self.handle_grid_layout_change
         )
         self.experiment_settings_panel.addChannelRequested.connect(
-            self.handle_add_channel
+            self.handle_add_source
         )
         self.experiment_settings_panel.removeChannelRequested.connect(
-            self.handle_remove_channel
+            self.handle_remove_source
         )
 
-        ### USRP Device Config Panel(s)
+        # USRP Device Config Panel(s)
         usrp_cfg = []
         for handler in self.device_handlers.values():
             if handler.device_type == "multi_usrp":
-                usrp_cfg = handler.config
+                usrp_cfg = handler.config.devices.values()
 
         self.usrp_config_panel = [None] * len(usrp_cfg)
         for idx, cfg in enumerate(usrp_cfg):
@@ -150,11 +165,11 @@ class Viewer(QMainWindow):
         controls_layout.addLayout(experiment_layout, stretch=4)
         top_layout.addLayout(controls_layout, stretch=3)
 
-        ### Metadata Panels
+        # Metadata Panels
         self.meta_panels = QVBoxLayout()
         # Status Panel - Experiment Log goes here
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)
         self.log_display_panel = LogDisplayPanel(logger=self.logger)
         self.meta_panels.addWidget(self.log_display_panel, stretch=3)
 
@@ -165,17 +180,13 @@ class Viewer(QMainWindow):
 
         main_layout.addLayout(top_layout)
 
-        ### Plot Grid - Initialized using config['disp_channels']
+        # Plot Grid
         self.plot_grid = PlotGrid(self.exp_config)
         main_layout.addWidget(self.plot_grid)
 
-        # Init plot grid
-        for channel in self.exp_config.get_param("disp_channels", []):
-            self.handle_add_channel(channel)
-
         central_widget.setLayout(main_layout)
 
-        ### Status Bar
+        # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.device_status_panel = DeviceStatusPanel(self.device_states)
@@ -195,6 +206,12 @@ class Viewer(QMainWindow):
         for handler in self.device_handlers.values():
             handler.dataReady.connect(self.plot_grid.add_new_data)
 
+    def discover_channels(self):
+        # Make all sources available to the overall app
+        for handler in self.device_handlers.values():
+            for source in handler.data_sources:
+                self.exp_config.available_channels.append(source)
+
     def start_initialization(self):
         # Disable button during initialization
         self.running_status = RunningStatus.NOINIT
@@ -203,6 +220,8 @@ class Viewer(QMainWindow):
 
         for handler in self.device_handlers.values():
             handler.connect()
+
+        # Make all sources available for display
 
     def start_recording(self):
         # Update state
@@ -293,23 +312,23 @@ class Viewer(QMainWindow):
     def handle_grid_layout_change(self, rows, cols):
         self.plot_grid.update_grid(rows, cols)
 
-    def handle_add_channel(self, channel):
-        if self.plot_grid.add_channel(channel):
-            # Update config
-            sel_channels = self.exp_config.get_param("disp_channels")
-            sel_channels.append(channel)
-            self.exp_config.set_param("disp_channels", list(set(sel_channels)))
+    def handle_add_source(self, source: DataSource):
+        if self.plot_grid.add_source(source):
+            # Update a
+            sel_channels = self.exp_config.get_param("display_sources")
+            sel_channels.append(source)
+            self.exp_config.set_param("display_sources", list(set(sel_channels)))
             # Change state of UI
-            self.experiment_settings_panel.update_channel("add", channel)
+            self.experiment_settings_panel.update_source("add", source)
 
-    def handle_remove_channel(self, channel):
-        if self.plot_grid.remove_channel(channel):
+    def handle_remove_source(self, source: DataSource):
+        if self.plot_grid.remove_source(source):
             # Update config
-            sel_channels = self.exp_config.get_param("disp_channels")
-            sel_channels.remove(channel)
-            self.exp_config.set_param("disp_channels", sel_channels)
+            sel_channels = self.exp_config.get_param("display_sources")
+            sel_channels.remove(source)
+            self.exp_config.set_param("display_sources", sel_channels)
             # Change state of UI
-            self.experiment_settings_panel.update_channel("remove", channel)
+            self.experiment_settings_panel.update_source("remove", source)
 
     def update_save_state(self, flag):
         self.saving_status = flag

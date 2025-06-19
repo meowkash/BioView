@@ -2,7 +2,12 @@ import queue
 
 from bioview.device import Device
 from bioview.device.common import DisplayWorker, SaveWorker
-from bioview.types import ConnectionStatus
+from bioview.types import (
+    ConnectionStatus,
+    DataSource,
+    MultiUsrpConfiguration,
+    UsrpConfiguration,
+)
 from bioview.utils import get_channel_map
 
 from .connect import ConnectWorker
@@ -12,19 +17,31 @@ from .transmit import TransmitWorker
 
 
 class MultiUsrpDevice(Device):
-    def __init__(self, config, exp_config, save=False):
-        super().__init__(device_type="multi_usrp", exp_config=exp_config, save=save)
-        self.config = config
+    def __init__(
+        self,
+        device_name,
+        config: MultiUsrpConfiguration,
+        save=False,
+        save_path=None,
+        display=True,
+    ):
+        super().__init__(
+            device_name=device_name,
+            config=config,
+            device_type="multi_usrp",
+            save=save,
+            save_path=save_path,
+            display=display,
+        )
 
         self.handler = {}
         self.state = {}
 
         self.if_filter_bw = []
 
-        for cfg in config:
-            dev_handler = UsrpDevice(config=cfg)
-            dev_name = dev_handler.name
-            self.if_filter_bw.extend(cfg.get_filter_bw())
+        for dev_name, dev_cfg in config.devices.items():
+            dev_handler = UsrpDevice(device_name=dev_name, config=dev_cfg)
+            self.if_filter_bw.extend(dev_cfg.get_filter_bw())
             dev_handler.logEvent.connect(self._log_message)
             dev_handler.connectionStateChanged.connect(
                 lambda value: self._on_state_update(device=dev_name, new_state=value)
@@ -33,24 +50,34 @@ class MultiUsrpDevice(Device):
             self.handler[dev_name] = dev_handler
             self.state[dev_name] = ConnectionStatus.DISCONNECTED
 
-        self.channel_mapping = None
+    def _populate_data_sources(self):
+        """
+        We can arrange multiple USRPs in a variety of configurations, including -
+        1. MIMO
+        2. Multi-Frequency Band
+        3. DPIC
+        The above are supported configurations and the list may keep growing.
+        In each case, our data source needs to know about what Tx and Rx
+        (absolute indices) it is using. Hence, the code below does the following -
+        1. From relative Tx/Rx mapping (which is what the API spec gives us), we
+        create absolute Tx/Rx mapping
+        2. We generate channel mapping and ensure each data source knows its sources
+        """
+        num_usrp_devices = len(self.config.devices)
 
-        self._generate_channel_mapping()
-
-    def _generate_channel_mapping(self):
-        # [1] -  Generate channel internal:external mapping
+        # Generate absolute Tx/Rx mapping across all USRP devices
         counter = 0
-        for idx, cfg in enumerate(self.config):
-            self.config[idx].absolute_channel_nums = [
-                counter + val for val in cfg.rx_channels
+        for dev_cfg in self.config.devices.values():
+            dev_cfg.absolute_channel_nums = [
+                counter + val for val in dev_cfg.rx_channels
             ]
-            counter += len(cfg.rx_channels)
+            counter += len(dev_cfg.rx_channels)
 
-        # [2] - Generate usrp channel pair labels
-        num_usrp_devices = len(self.config)
-        rx_per_usrp = [len(x.rx_channels) for x in self.config]
-        tx_per_usrp = [len(x.tx_channels) for x in self.config]
-        self.channel_mapping = get_channel_map(
+        # Generate sources with mapping
+        rx_per_usrp = [len(x.rx_channels) for x in self.config.devices.values()]
+        tx_per_usrp = [len(x.tx_channels) for x in self.config.devices.values()]
+        self.data_sources = get_channel_map(
+            device=self,
             n_devices=num_usrp_devices,
             rx_per_dev=rx_per_usrp,
             tx_per_dev=tx_per_usrp,
@@ -58,20 +85,9 @@ class MultiUsrpDevice(Device):
             multi_pairs=getattr(self, "multi_pairs", None),
         )
 
-        # [3] - Generate usrp channel pair labels:data queue index mapping
-        counter = 0
-        ch_map = self.channel_mapping
-        for ridx in range(len(ch_map)):
-            for tidx in range(len(ch_map[ridx])):
-                label = ch_map[ridx][tidx]
-                if label != "":
-                    self.data_mapping[label] = counter
-                    counter += 1
-
-        # [4] Add usrp Parameters
-        # Populate list of all channel frequencies
-        channel_ifs = [None] * len(self.channel_mapping)
-        for cfg in self.config:
+        # Populate list of all channel frequencies - Number of Tx/Rx
+        channel_ifs = [None] * sum(rx_per_usrp)
+        for cfg in self.config.devices.values():
             for idx, abs_idx in enumerate(cfg.absolute_channel_nums):
                 channel_ifs[abs_idx] = cfg.if_freq[idx]
         self.channel_ifs = channel_ifs
@@ -101,12 +117,10 @@ class MultiUsrpDevice(Device):
 
         # Start processing
         self.threads["Process"] = ProcessWorker(
+            config=self.config,
             channel_ifs=self.channel_ifs,
             if_filter_bw=self.if_filter_bw,
-            samp_rate=self.exp_config.samp_rate[self.device_type],
-            save_ds=self.exp_config.save_ds[self.device_type],
-            channel_mapping=self.channel_mapping,
-            data_mapping=self.data_mapping,
+            data_sources=self.data_sources,
             rx_queues=[x.rx_queue for x in self.handler.values()],
             save_queue=self.save_queue,
             disp_queue=self.display_queue,
@@ -114,10 +128,30 @@ class MultiUsrpDevice(Device):
         )
 
         # Start saving
-        if self.exp_config.save_phase:
-            self.num_channels = 2 * len(self.data_mapping)
+        if self.config.get_param("save_phase", True):
+            self.num_channels = 2 * len(self.data_sources)
         else:
-            self.num_channels = len(self.data_mapping)
+            self.num_channels = len(self.data_sources)
+
+        if self.save and self.save_path is not None:
+            self.threads["Save"] = SaveWorker(
+                save_path=self.save_path,
+                data_queue=self.save_queue,
+                num_channels=self.num_channels,
+                running=True,
+            )
+
+        # Create display thread
+        if self.display:
+            self.threads["Display"] = DisplayWorker(
+                config=self.config,
+                data_queue=self.display_queue,
+                running=True,
+            )
+            self.threads["Display"].dataReady.connect(self._update_display)
+
+        # Start threads
+        super().run()
 
     def stop(self):
         for handler in self.handler.values():
@@ -128,11 +162,13 @@ class MultiUsrpDevice(Device):
 
 
 class UsrpDevice(Device):
-    def __init__(self, config):
-        super().__init__(device_type="usrp", exp_config=None, save=False)
-        self.config = config
-        self.name = config.get_param("device_name")
+    def __init__(self, device_name, config: UsrpConfiguration):
+        super().__init__(device_name=device_name, config=config, device_type="usrp")
+
         self.rx_queue = queue.Queue()
+
+    def _populate_data_sources(self):
+        pass  # No fancy data source mapping is needed here
 
     def connect(self):
         self.connect_thread = ConnectWorker(self.config)
@@ -171,7 +207,6 @@ class UsrpDevice(Device):
             running=True,
         )
 
-        # Start threads
         super().run()
 
     def stop(self):
@@ -192,12 +227,10 @@ class UsrpDevice(Device):
         self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
 
 
-def get_device_object(config, exp_config):
-    if isinstance(config, tuple) or isinstance(config, list):
-        return MultiUsrpDevice(config=config, exp_config=exp_config)
-    else:
-        cfg_list = [config]
-        return MultiUsrpDevice(config=cfg_list, exp_config=exp_config)
+def get_device_object(device_name, config, save=False, save_path=None):
+    return MultiUsrpDevice(
+        device_name=device_name, config=config, save=save, save_path=save_path
+    )
 
 
 __all__ = ["MultiUsrpDevice", "get_device_object"]
