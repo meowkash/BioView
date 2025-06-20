@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel
-from PyQt6.QtCore import QTimer, QEvent, QMutex
-from PyQt6.QtGui import QPainter, QColor, QPen
+from PyQt6.QtCore import QEvent, QMutex, QTimer
+from PyQt6.QtGui import QColor, QPainter, QPen
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from bioview.types import ConnectionStatus
 
@@ -66,9 +66,9 @@ class DeviceStatusWidget(QWidget):
 
 
 class DeviceStatusPanel(QWidget):
-    def __init__(self, devices: dict = {}):
+    def __init__(self, devices):
         super().__init__()
-        self.devices = devices
+        self.devices = devices.copy()
         self.device_widgets = {}
 
         # Create horizontal layout for all devices
@@ -79,7 +79,8 @@ class DeviceStatusPanel(QWidget):
         self.mutex = QMutex()
 
         # Add device widgets
-        for device_name, device_state in self.devices.items():
+        for device_name, device_map in self.devices.items():
+            device_state = device_map["state"]
             self.add_device(device_name, device_state)
 
         self.setLayout(self.layout)

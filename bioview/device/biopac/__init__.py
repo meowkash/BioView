@@ -42,8 +42,11 @@ class BiopacDevice(Device):
     def connect(self):
         self.connect_thread = ConnectWorker(self.config)
         self.connect_thread.initSucceeded.connect(self._on_connect_success)
+        self.connect_thread.initFailed.connect(self._on_connect_failure)
+        self.connect_thread.logEvent.connect(self._log_message)
 
-        return super().connect()
+        self.connect_thread.start()
+        self.connect_thread.wait()
 
     def run(self):
         if self.handler is None:

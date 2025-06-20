@@ -1,21 +1,27 @@
-# A multi-processing version of the old controller. 
-from pathlib import Path
+# A multi-processing version of the old controller.
 import logging
 import multiprocessing
+import time
+from pathlib import Path
+from threading import Thread
 
-from PyQt6.QtCore import QMutex
+import numpy as np
+from PyQt6.QtCore import QMutex, QObject, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
 from bioview.device import get_device_object
 from bioview.device.common import InstructionWorker
 from bioview.types import (
+    CommandType,
     ConnectionStatus,
     DataSource,
-    ExperimentConfiguration,
-    RunningStatus,
     Device,
-    DeviceProcess
+    DeviceProcess,
+    ExperimentConfiguration,
+    Message,
+    ResponseType,
+    RunningStatus,
 )
 from bioview.ui import (
     AnnotateEventPanel,
@@ -27,6 +33,45 @@ from bioview.ui import (
     TextDialog,
     UsrpDeviceConfigPanel,
 )
+
+
+class ResponseListener(QObject):
+    logEvent = pyqtSignal(str, str)  # (Level, Message)
+    dataReady = pyqtSignal(np.ndarray, DataSource)  # (Data, Source)
+    connectionStateChanged = pyqtSignal(str, ConnectionStatus)  # (Device Name, State)
+
+    # Signals to send to the main thread
+    def __init__(self, data_queue: multiprocessing.Queue, parent=None):
+        super().__init__(parent)
+        self.data_queue = data_queue
+
+    def start(self):
+        self.running = True
+        while self.running:
+            try:
+                resp = self.data_queue.get(timeout=2)
+                if not isinstance(resp, Message):
+                    raise TypeError(
+                        f"Expected response to be of type bioview.types.Message but got {type(resp)} instead"
+                    )
+
+                if resp.msg_type == ResponseType.ERROR:
+                    self.logEvent.emit("error", resp.value)
+                elif resp.msg_type == ResponseType.WARNING:
+                    self.logEvent.emit("warning", resp.value)
+                elif resp.msg_type == ResponseType.INFO:
+                    self.logEvent.emit("info", resp.value)
+                elif resp.msg_type == ResponseType.DEBUG:
+                    self.logEvent.emit("debug", resp.value)
+                elif resp.msg_type == ResponseType.STATUS:
+                    self.connectionStateChanged.emit(resp.value[0], resp.value[1])
+                elif resp.msg_type == ResponseType.DISPLAY:
+                    self.dataReady.emit("error", resp.value[0], resp.value[1])
+            except Exception:
+                time.sleep(0.01)
+
+    def stop(self):
+        self.running = False
 
 
 class ViewerMP(QMainWindow):
@@ -48,8 +93,12 @@ class ViewerMP(QMainWindow):
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False
 
-        # Create device handlers
+        # Create runners
         self.runners = {}
+        self.data_queue = (
+            multiprocessing.Queue()
+        )  # Everyone shares data queue as it goes into graphical display
+
         for dev_name, dev_cfg in device_config.items():
             device: Device = get_device_object(
                 device_name=dev_name,
@@ -58,24 +107,22 @@ class ViewerMP(QMainWindow):
                 exp_config=exp_config,
             )
             cmd_queue = multiprocessing.Queue()
-            data_queue = multiprocessing.Queue()
+
             process = DeviceProcess(
+                id=dev_name,
                 cmd_queue=cmd_queue,
-                data_queue=data_queue,
-                device=device
+                data_queue=self.data_queue,
+                device=device,
             )
             self.runners[dev_name] = {
-                'device': device, 
-                'process': process,  
-                'state': ConnectionStatus.DISCONNECTED # Initialize device state
+                "device": device,
+                "process": process,
+                "state": ConnectionStatus.DISCONNECTED,  # Initialize device state
+                "cmd_queue": cmd_queue,
             }
-            # dev_obj.connectionStateChanged.connect(
-            #     lambda value: self.update_connection_status(
-            #         device=dev_name, state=value
-            #     )
-            # )
-            # self.device_handlers[dev_name] = dev_obj
-        self.discover_channels()
+            process.start()
+
+        self.discover_sources()
 
         # Track instruction
         if exp_config.get_param("instruction_type") is None:
@@ -95,7 +142,10 @@ class ViewerMP(QMainWindow):
 
         # Enable Logging
         self._connect_logging()
-        self._connect_display()
+
+        # Enable listening for IPC
+        self.listener = ResponseListener(self.data_queue)
+        self._start_listener()
 
     def _init_ui(self):
         # Define main wndow
@@ -128,9 +178,10 @@ class ViewerMP(QMainWindow):
         controls_layout.addWidget(self.app_control_panel, stretch=1)
 
         # Connect signal handlers
-        self.app_control_panel.connectionInitiated.connect(self.start_initialization)
-        self.app_control_panel.startRequested.connect(self.start_recording)
-        self.app_control_panel.stopRequested.connect(self.stop_recording)
+        self.app_control_panel.connectionInitiated.connect(self.connect)
+        # self.app_control_panel.disconnectRequested.connect(self.disconnect)
+        self.app_control_panel.startRequested.connect(self.start)
+        self.app_control_panel.stopRequested.connect(self.stop)
         self.app_control_panel.saveRequested.connect(self.update_save_state)
         self.app_control_panel.instructionsEnabled.connect(self.toggle_instructions)
         self.app_control_panel.balanceRequested.connect(self.perform_gain_balancing)
@@ -157,9 +208,9 @@ class ViewerMP(QMainWindow):
 
         # USRP Device Config Panel(s)
         usrp_cfg = []
-        for handler in self.device_handlers.values():
-            if handler.device_type == "multi_usrp":
-                usrp_cfg = handler.config.devices.values()
+        for runner in self.runners.values():
+            if runner["device"].device_type == "multi_usrp":
+                usrp_cfg = runner["device"].config.devices.values()
 
         self.usrp_config_panel = [None] * len(usrp_cfg)
         for idx, cfg in enumerate(usrp_cfg):
@@ -193,7 +244,8 @@ class ViewerMP(QMainWindow):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.device_status_panel = DeviceStatusPanel(self.device_states)
+        self.device_status_panel = DeviceStatusPanel(self.runners)
+
         # Add device status panel to status bar (on the right side)
         self.status_bar.addPermanentWidget(self.device_status_panel)
         # Add some info text to status bar
@@ -203,37 +255,63 @@ class ViewerMP(QMainWindow):
         self.plot_grid.logEvent.connect(self.log_display_panel.log_message)
         for _, panel in enumerate(self.usrp_config_panel):
             panel.logEvent.connect(self.log_display_panel.log_message)
-        for handler in self.device_handlers.values():
-            handler.logEvent.connect(self.log_display_panel.log_message)
 
-    def _connect_display(self):
-        for handler in self.device_handlers.values():
-            handler.dataReady.connect(self.plot_grid.add_new_data)
+    def _start_listener(self):
+        # Connect signals
+        self.listener.dataReady.connect(self.plot_grid.add_new_data)
+        self.listener.logEvent.connect(self.log_display_panel.log_message)
+        self.listener.connectionStateChanged.connect(self.update_connection_status)
 
-    def discover_channels(self):
+        # Start listening
+        self.listener_thread = Thread(target=self.listener.start)
+        self.listener_thread.daemon = True
+        self.listener_thread.start()
+
+    def discover_sources(self):
         # Make all sources available to the overall app
-        for handler in self.device_handlers.values():
+        for runner in self.runners.values():
+            handler = runner["device"]
             for source in handler.data_sources:
                 self.exp_config.available_channels.append(source)
 
-    def start_initialization(self):
+    def connect(self):
         # Disable button during initialization
         self.running_status = RunningStatus.NOINIT
         self.connection_status = ConnectionStatus.CONNECTING
         self.update_buttons()
 
-        for handler in self.device_handlers.values():
-            handler.connect()
+        connect_cmd = Message(
+            msg_type=CommandType.CONNECT,
+        )
 
-        # Make all sources available for display
+        for runner in self.runners.values():
+            runner["cmd_queue"].put(connect_cmd)
 
-    def start_recording(self):
+    def disconnect(self):
+        # Disable button during initialization
+        self.running_status = RunningStatus.NOINIT
+        self.connection_status = ConnectionStatus.DISCONNECTED
+
+        disconnect_cmd = Message(
+            msg_type=CommandType.DISCONNECT,
+        )
+
+        for runner in self.runners.values():
+            runner["cmd_queue"].put(disconnect_cmd)
+
+        self.update_buttons()
+
+    def start(self):
         # Update state
         self.running_status = RunningStatus.RUNNING
         self.connection_status = ConnectionStatus.CONNECTED
 
-        for handler in self.device_handlers.values():
-            handler.run()
+        start_cmd = Message(
+            msg_type=CommandType.START,
+        )
+
+        for runner in self.runners.values():
+            runner["cmd_queue"].put(start_cmd)
 
         # Create instruction thread
         if self.enable_instructions:
@@ -250,13 +328,17 @@ class ViewerMP(QMainWindow):
         # Update UI
         self.update_buttons()
 
-    def stop_recording(self):
+    def stop(self):
         # Update state
         self.running_status = RunningStatus.STOPPED
         self.connection_status = ConnectionStatus.CONNECTED
 
-        for handler in self.device_handlers.values():
-            handler.stop()
+        stop_cmd = Message(
+            msg_type=CommandType.STOP,
+        )
+
+        for runner in self.runners.values():
+            runner["cmd_queue"].put(stop_cmd)
 
         # Stop instruction
         if self.instructions_thread is not None:
@@ -275,12 +357,13 @@ class ViewerMP(QMainWindow):
             if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
                 handler.sweep_frequency()
 
-    def update_connection_status(self, device, state):
-        self.device_states[device] = state
-        self.device_status_panel.update_device_state(device, state)
+    def update_connection_status(self, device_name, state):
+        self.runners[device_name]["state"] = state
+        self.device_status_panel.update_device_state(device_name, state)
 
         inited = True
-        for _, dev_state in self.device_states.items():
+        for runner in self.runners.values():
+            dev_state = runner["state"]
             if dev_state != ConnectionStatus.CONNECTED:
                 inited = False
                 break
@@ -343,6 +426,7 @@ class ViewerMP(QMainWindow):
             self.instruction_dialog.toggle_ui(self.enable_instructions)
 
     def closeEvent(self, a0):
-        # Ensure all threads are closed
-        self.stop_recording()
+        # Send disconnect to all
+        self.disconnect()
+        self.listener.stop()
         return super().closeEvent(a0)

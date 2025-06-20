@@ -44,7 +44,9 @@ class MultiUsrpDevice(Device):
             self.if_filter_bw.extend(dev_cfg.get_filter_bw())
             dev_handler.logEvent.connect(self._log_message)
             dev_handler.connectionStateChanged.connect(
-                lambda value: self._on_state_update(device=dev_name, new_state=value)
+                lambda value, dev_name=dev_name: self._on_state_update(
+                    device=dev_name, new_state=value
+                )
             )
 
             self.handler[dev_name] = dev_handler
@@ -107,8 +109,6 @@ class MultiUsrpDevice(Device):
     def connect(self):
         for handler in self.handler.values():
             handler.connect()
-
-        super().connect()
 
     def run(self):
         # Start transceiving
@@ -178,7 +178,12 @@ class UsrpDevice(Device):
             )
         )
 
-        super().connect()
+        self.connect_thread.initFailed.connect(self._on_connect_failure)
+        self.connect_thread.logEvent.connect(self._log_message)
+        super().connectionStateChanged.emit(ConnectionStatus.CONNECTING)
+
+        self.connect_thread.start()
+        self.connect_thread.wait()
 
     def run(self):
         if self.handler is None:
