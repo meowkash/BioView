@@ -100,29 +100,24 @@ class ViewerMP(QMainWindow):
         )  # Everyone shares data queue as it goes into graphical display
 
         for dev_name, dev_cfg in device_config.items():
-            device: Device = get_device_object(
-                device_name=dev_name,
-                config=dev_cfg,
-                save=self.saving_status,
-                exp_config=exp_config,
-            )
             cmd_queue = multiprocessing.Queue()
-
+            
             process = DeviceProcess(
                 id=dev_name,
+                device_type=dev_cfg.device_type,
+                config=dev_cfg,
+                exp_config=exp_config,
                 cmd_queue=cmd_queue,
                 data_queue=self.data_queue,
-                device=device,
+                save=self.saving_status,
             )
             self.runners[dev_name] = {
-                "device": device,
+                "device_type": dev_cfg.device_type, 
                 "process": process,
                 "state": ConnectionStatus.DISCONNECTED,  # Initialize device state
                 "cmd_queue": cmd_queue,
             }
             process.start()
-
-        self.discover_sources()
 
         # Track instruction
         if exp_config.get_param("instruction_type") is None:
@@ -209,8 +204,8 @@ class ViewerMP(QMainWindow):
         # USRP Device Config Panel(s)
         usrp_cfg = []
         for runner in self.runners.values():
-            if runner["device"].device_type == "multi_usrp":
-                usrp_cfg = runner["device"].config.devices.values()
+            if runner["device_type"] == "multi_usrp":
+                usrp_cfg = runner["config"].devices.values()
 
         self.usrp_config_panel = [None] * len(usrp_cfg)
         for idx, cfg in enumerate(usrp_cfg):
@@ -266,13 +261,6 @@ class ViewerMP(QMainWindow):
         self.listener_thread = Thread(target=self.listener.start)
         self.listener_thread.daemon = True
         self.listener_thread.start()
-
-    def discover_sources(self):
-        # Make all sources available to the overall app
-        for runner in self.runners.values():
-            handler = runner["device"]
-            for source in handler.data_sources:
-                self.exp_config.available_channels.append(source)
 
     def connect(self):
         # Disable button during initialization

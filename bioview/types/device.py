@@ -1,113 +1,11 @@
 import queue
-import time
-from multiprocessing import Process, Queue
 
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .config import Configuration
 from .datasource import DataSource
-from .ipc import CommandType, Message, ResponseType
 from .status import ConnectionStatus
-
-
-class DeviceProcess(Process):
-    def __init__(
-        self,
-        id: str,
-        cmd_queue: Queue,
-        data_queue: Queue,
-        device,
-        daemon=None,
-    ):
-        super().__init__(daemon=daemon)
-        self.cmd_queue = cmd_queue  # Receives command from main
-        self.data_queue = data_queue  # Sends response to main
-        self.id = id
-
-        self.device = device
-
-        # Connect handlers
-        self.device.logEvent.connect(self.log_response)
-        self.device.connectionStateChanged.connect(self.update_status)
-        self.device.dataReady.connect(self.send_display)
-
-    def listen(self):
-        try:
-            cmd = self.cmd_queue.get_nowait()
-            if not isinstance(cmd, Message):
-                raise TypeError(
-                    f"Expected command to be of type bioview.types.Message but got {type(cmd)} instead"
-                )
-
-            # Parse commands
-            if cmd.msg_type == CommandType.CONNECT:
-                self.device.connect()
-            elif cmd.msg_type == CommandType.START:
-                self.device.run()
-            elif cmd.msg_type == CommandType.STOP:
-                self.device.stop()
-            elif cmd.msg_type == CommandType.SAVE:
-                self.device.save = True
-                self.device.save_path = cmd.value
-            elif cmd.msg_type == CommandType.SET_PARAM:
-                pass  # TODO: Implement
-            elif cmd.msg_type == CommandType.DISCONNECT:
-                self.running = False
-                self.stop()
-
-        except queue.Empty:
-            time.sleep(0.1)  # Keep load low
-        except TypeError as e:
-            resp = Message(
-                msg_type=ResponseType.ERROR,
-                value=str(e),
-            )
-            self.respond(resp)
-
-    def log_response(self, level, message):
-        if level == "error":
-            msg_type = ResponseType.ERROR
-        elif level == "warning":
-            msg_type = ResponseType.WARNING
-        elif level == "info":
-            msg_type = ResponseType.INFO
-        else:
-            msg_type = ResponseType.DEBUG
-
-        resp = Message(msg_type=msg_type, value=message)
-        self.respond(resp)
-
-    def update_status(self, status: ConnectionStatus):
-        resp = Message(msg_type=ResponseType.STATUS, value=(self.id, status))
-        self.respond(resp)
-
-    def send_display(self, data: np.ndarray, source: DataSource):
-        resp = Message(msg_type=ResponseType.DISPLAY, value=(data, source))
-        self.respond(resp)
-
-    def respond(self, data):
-        try:
-            if not isinstance(data, Message):
-                raise TypeError(
-                    f"Expected response to be of type bioview.types.Message but got {type(data)} instead"
-                )
-
-            self.data_queue.put_nowait(data)
-        except queue.Full:
-            print("Unable to add to data queue as queue is full")
-        except TypeError as e:
-            resp = Message(
-                msg_type=ResponseType.ERROR,
-                value=str(e),
-            )
-            self.data_queue.put_nowait(resp)
-
-    def run(self):
-        self.running = True
-        while self.running:
-            self.listen()
-
 
 class Device(QObject):
     connectionStateChanged = pyqtSignal(ConnectionStatus)
