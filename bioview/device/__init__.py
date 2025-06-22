@@ -3,11 +3,10 @@ import numpy as np
 import queue
 from multiprocessing import Process, Queue
 
+from PyQt6.QtCore import QProcess
 from bioview.types import (
     Configuration,
-    BiopacConfiguration,
     ExperimentConfiguration,
-    MultiUsrpConfiguration,
     CommandType, 
     Message, 
     ResponseType,
@@ -15,24 +14,24 @@ from bioview.types import (
     DataSource
 )
 
-class DeviceProcess(Process):
+from .usrp import MultiUsrpConfiguration, UsrpConfiguration
+from .biopac import BiopacConfiguration
+
+class DeviceProcess(QProcess):
     def __init__(
         self,
-        id: str,
-        device_type: str, 
+        id: str, 
         config: Configuration, 
         exp_config: ExperimentConfiguration,
         cmd_queue: Queue,
         data_queue: Queue,
-        save: bool, 
-        daemon=None,
+        save: bool
     ):
-        super().__init__(daemon=daemon)
+        super().__init__()
         self.cmd_queue = cmd_queue  # Receives command from main
         self.data_queue = data_queue  # Sends response to main
         self.id = id
         self.config = config 
-        self.device_type = device_type, 
         self.save = save 
         self.exp_config = exp_config
         
@@ -126,6 +125,8 @@ class DeviceProcess(Process):
         while self.running:
             self.listen()
 
+    def stop(self):
+        self.running = False
 
 def _check_type(obj, typ):
     if isinstance(obj, list) or isinstance(obj, tuple):
@@ -157,4 +158,4 @@ def get_device_object(device_name, config, save, exp_config: ExperimentConfigura
         return None
 
 
-__all__ = ["get_device_object"]
+__all__ = ["MultiUsrpConfiguration", "BiopacConfiguration", "get_device_object"]

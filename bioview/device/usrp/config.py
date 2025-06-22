@@ -1,6 +1,5 @@
 from bioview.constants import BASE_USRP_CONFIG
-
-from .config import Configuration
+from bioview.types import Configuration
 
 
 class MultiUsrpConfiguration(Configuration):

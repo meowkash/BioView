@@ -5,7 +5,7 @@ import uhd
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.constants import INIT_DELAY
-from bioview.types import UsrpConfiguration
+from .config import UsrpConfiguration
 
 
 class TransmitWorker(QThread):

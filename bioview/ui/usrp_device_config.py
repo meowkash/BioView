@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QGridLayout, QLabel, QGroupBox, QDoubleSpinBox
 from PyQt6.QtCore import pyqtSignal
 
-from bioview.types import UsrpConfiguration
+from bioview.device import UsrpConfiguration
 
 
 class UsrpDeviceConfigPanel(QGroupBox):

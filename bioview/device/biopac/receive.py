@@ -3,7 +3,7 @@ from ctypes import byref, c_double
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.types import BiopacConfiguration
+from .config import BiopacConfiguration
 from bioview.utils import wrap_result_code
 
 

@@ -1,4 +1,4 @@
-from .config import Configuration
+from bioview.types import Configuration
 
 
 class BiopacConfiguration(Configuration):

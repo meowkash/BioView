@@ -10,14 +10,12 @@ from PyQt6.QtCore import QMutex, QObject, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.device import get_device_object
 from bioview.device.common import InstructionWorker
+from bioview.device import DeviceProcess, MultiUsrpConfiguration
 from bioview.types import (
     CommandType,
     ConnectionStatus,
     DataSource,
-    Device,
-    DeviceProcess,
     ExperimentConfiguration,
     Message,
     ResponseType,
@@ -104,7 +102,6 @@ class ViewerMP(QMainWindow):
             
             process = DeviceProcess(
                 id=dev_name,
-                device_type=dev_cfg.device_type,
                 config=dev_cfg,
                 exp_config=exp_config,
                 cmd_queue=cmd_queue,
@@ -112,8 +109,8 @@ class ViewerMP(QMainWindow):
                 save=self.saving_status,
             )
             self.runners[dev_name] = {
-                "device_type": dev_cfg.device_type, 
                 "process": process,
+                "config": dev_cfg,
                 "state": ConnectionStatus.DISCONNECTED,  # Initialize device state
                 "cmd_queue": cmd_queue,
             }
@@ -204,7 +201,7 @@ class ViewerMP(QMainWindow):
         # USRP Device Config Panel(s)
         usrp_cfg = []
         for runner in self.runners.values():
-            if runner["device_type"] == "multi_usrp":
+            if isinstance(runner["config"], MultiUsrpConfiguration):
                 usrp_cfg = runner["config"].devices.values()
 
         self.usrp_config_panel = [None] * len(usrp_cfg)
@@ -336,14 +333,16 @@ class ViewerMP(QMainWindow):
         self.update_buttons()
 
     def perform_gain_balancing(self):
-        for handler in self.device_handlers.values():
-            if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
-                handler.balance_gain()
+        # for handler in self.device_handlers.values():
+        #     if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
+        #         handler.balance_gain()
+        pass 
 
     def perform_frequency_sweep(self):
-        for handler in self.device_handlers.values():
-            if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
-                handler.sweep_frequency()
+        # for handler in self.device_handlers.values():
+        #     if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
+        #         handler.sweep_frequency()
+        pass 
 
     def update_connection_status(self, device_name, state):
         self.runners[device_name]["state"] = state

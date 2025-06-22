@@ -3,9 +3,8 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.types import MultiUsrpConfiguration
 from bioview.utils import apply_filter, get_filter
-
+from .config import MultiUsrpConfiguration
 
 class ProcessWorker(QThread):
     logEvent = pyqtSignal(str, str)

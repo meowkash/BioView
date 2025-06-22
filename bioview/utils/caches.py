@@ -37,7 +37,7 @@ def update_mpdev_path(dll_path):
     # Update
     try:
         with open(cache_file, "w") as fobj:
-            json.dump(dll_path, fobj)
+            json.dump(str(dll_path), fobj)
     except Exception as e:
         print(f"Error updating cache: {e}")
     finally:
