@@ -1,41 +1,42 @@
-import time
-import numpy as np
 import queue
+import time
 from multiprocessing import Process, Queue
 
+import numpy as np
 from PyQt6.QtCore import QProcess
+
 from bioview.types import (
+    CommandType,
     Configuration,
-    ExperimentConfiguration,
-    CommandType, 
-    Message, 
-    ResponseType,
     ConnectionStatus,
-    DataSource
+    DataSource,
+    ExperimentConfiguration,
+    Message,
+    ResponseType,
 )
 
-from .usrp import MultiUsrpConfiguration, UsrpConfiguration
 from .biopac import BiopacConfiguration
+from .usrp import MultiUsrpConfiguration, UsrpConfiguration
+
 
 class DeviceProcess(QProcess):
     def __init__(
         self,
-        id: str, 
-        config: Configuration, 
+        id: str,
+        config: Configuration,
         exp_config: ExperimentConfiguration,
         cmd_queue: Queue,
         data_queue: Queue,
-        save: bool
+        save: bool,
     ):
         super().__init__()
         self.cmd_queue = cmd_queue  # Receives command from main
         self.data_queue = data_queue  # Sends response to main
         self.id = id
-        self.config = config 
-        self.save = save 
+        self.config = config
+        self.save = save
         self.exp_config = exp_config
-        
-    
+
     def listen(self):
         try:
             cmd = self.cmd_queue.get_nowait()
@@ -109,24 +110,25 @@ class DeviceProcess(QProcess):
 
     def run(self):
         self.running = True
-        
+
         self.device = get_device_object(
-            device_name = self.id, 
+            device_name=self.id,
             config=self.config,
-            save = self.save,
-            exp_config=self.exp_config
-        ) 
-        
+            save=self.save,
+            exp_config=self.exp_config,
+        )
+
         # Connect handlers
         self.device.logEvent.connect(self.log_response)
         self.device.connectionStateChanged.connect(self.update_status)
         self.device.dataReady.connect(self.send_display)
-        
+
         while self.running:
             self.listen()
 
     def stop(self):
         self.running = False
+
 
 def _check_type(obj, typ):
     if isinstance(obj, list) or isinstance(obj, tuple):
@@ -158,4 +160,9 @@ def get_device_object(device_name, config, save, exp_config: ExperimentConfigura
         return None
 
 
-__all__ = ["MultiUsrpConfiguration", "BiopacConfiguration", "get_device_object"]
+__all__ = [
+    "MultiUsrpConfiguration",
+    "UsrpConfiguration",
+    "BiopacConfiguration",
+    "get_device_object",
+]

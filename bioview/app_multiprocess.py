@@ -10,8 +10,8 @@ from PyQt6.QtCore import QMutex, QObject, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.device.common import InstructionWorker
 from bioview.device import DeviceProcess, MultiUsrpConfiguration
+from bioview.device.common import InstructionWorker
 from bioview.types import (
     CommandType,
     ConnectionStatus,
@@ -99,7 +99,7 @@ class ViewerMP(QMainWindow):
 
         for dev_name, dev_cfg in device_config.items():
             cmd_queue = multiprocessing.Queue()
-            
+
             process = DeviceProcess(
                 id=dev_name,
                 config=dev_cfg,
@@ -269,8 +269,12 @@ class ViewerMP(QMainWindow):
             msg_type=CommandType.CONNECT,
         )
 
-        for runner in self.runners.values():
+        for device_name, runner in self.runners.items():
+            # Tell every process to start
             runner["cmd_queue"].put(connect_cmd)
+            runner["state"] = ConnectionStatus.CONNECTING
+            # Update control panel
+            self.device_status_panel.update_device_state(device_name, runner["state"])
 
     def disconnect(self):
         # Disable button during initialization
@@ -336,26 +340,20 @@ class ViewerMP(QMainWindow):
         # for handler in self.device_handlers.values():
         #     if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
         #         handler.balance_gain()
-        pass 
+        pass
 
     def perform_frequency_sweep(self):
         # for handler in self.device_handlers.values():
         #     if handler.device_type == "usrp" or handler.device_type == "multi_usrp":
         #         handler.sweep_frequency()
-        pass 
+        pass
 
     def update_connection_status(self, device_name, state):
         self.runners[device_name]["state"] = state
         self.device_status_panel.update_device_state(device_name, state)
 
-        inited = True
-        for runner in self.runners.values():
-            dev_state = runner["state"]
-            if dev_state != ConnectionStatus.CONNECTED:
-                inited = False
-                break
-
-        if inited:
+        # If all devices successfully connected, let the buttons be updated
+        if self.check_if_connect_succeeded():
             self.running_status = RunningStatus.STOPPED
             self.connection_status = ConnectionStatus.CONNECTED
             self.update_buttons()
@@ -371,6 +369,14 @@ class ViewerMP(QMainWindow):
         self.experiment_settings_panel.update_button_states(
             self.connection_status, self.running_status
         )
+
+    def check_if_connect_succeeded(self):
+        flag = True
+        for runner in self.runners.values():
+            if runner["state"] != ConnectionStatus.CONNECTED:
+                flag = False
+
+        return flag
 
     def on_init_failure(self, error_message):
         self.running_status = RunningStatus.NOINIT

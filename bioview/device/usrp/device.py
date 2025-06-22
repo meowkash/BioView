@@ -1,11 +1,7 @@
 import queue
 
-from bioview.types import Device
 from bioview.device.common import DisplayWorker, SaveWorker
-from bioview.types import (
-    ConnectionStatus,
-    DataSource
-)
+from bioview.types import ConnectionStatus, Device
 from bioview.utils import get_channel_map
 
 from .config import MultiUsrpConfiguration, UsrpConfiguration
@@ -13,6 +9,7 @@ from .connect import ConnectWorker
 from .process import ProcessWorker
 from .receive import ReceiveWorker
 from .transmit import TransmitWorker
+
 
 class MultiUsrpDevice(Device):
     def __init__(
