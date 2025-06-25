@@ -2,15 +2,14 @@ import queue
 
 import numpy as np
 import uhd
-from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.constants import INIT_DELAY, SAVE_BUFFER_SIZE, SETTLING_TIME
+from bioview.utils import emit_signal
+
 from .config import UsrpConfiguration
 
 
-class ReceiveWorker(QThread):
-    logEvent = pyqtSignal(str, str)
-
+class ReceiveWorker:
     def __init__(
         self,
         usrp,
@@ -21,6 +20,9 @@ class ReceiveWorker(QThread):
         parent=None,
     ):
         super().__init__(parent)
+        # Signals 
+        self.log_event = None 
+        
         # Modifiable params
         self.rx_gain = config.get_param("rx_gain").copy()
 
@@ -33,9 +35,9 @@ class ReceiveWorker(QThread):
         self.running = running
 
     def run(self):
-        self.logEvent.emit("debug", "Receiving Started")
+        emit_signal(self.log_event, "debug", "Receiving Started")
         if self.usrp is None or self.rx_streamer is None:
-            self.logEvent.emit("error", "USRP or Rx streamer not initialized.")
+            emit_signal(self.log_event, "error", "USRP or Rx streamer not initialized.")
             return
 
         rx_metadata = uhd.types.RXMetadata()
@@ -77,17 +79,14 @@ class ReceiveWorker(QThread):
             if curr_rx_gain != self.rx_gain:
                 for chan in self.config.rx_channels:
                     self.usrp.set_rx_gain(curr_rx_gain[chan], chan)
-                self.logEvent.emit(
-                    "debug",
-                    f"Rx gain updated to {curr_rx_gain}. Current {self.rx_gain}",
-                )
+                emit_signal(self.log_event, "debug", f"Rx gain updated to {curr_rx_gain}. Current {self.rx_gain}")
                 self.rx_gain = curr_rx_gain
 
             try:
                 # Receive samples
                 num_rx_samps = self.rx_streamer.recv(recv_buffer, rx_metadata, timeout)
             except RuntimeError as ex:
-                self.logEvent.emit("error", f"Receiver Runtime Eror: {ex}")
+                emit_signal(self.log_event, "error", f"Receiver Runtime Eror: {ex}")
                 continue
 
             timeout = INIT_DELAY  # Reduce timeout for subsequent transmissions
@@ -110,13 +109,9 @@ class ReceiveWorker(QThread):
                     rx_metadata.time_spec.get_full_secs(),
                     rx_metadata.time_spec.get_frac_secs(),
                 )
-                self.logEvent.emit(
-                    "warning", f"Receiver Overflow: {rx_metadata.strerror()}"
-                )
+                emit_signal(self.log_event, "warning", f"Receiver Overflow: {rx_metadata.strerror()}")
             elif rx_metadata.error_code == uhd.types.RXMetadataErrorCode.late:
-                self.logEvent.emit(
-                    "warning", f"Receiver Late: {rx_metadata.strerror()}, restarting..."
-                )
+                emit_signal(self.log_event, "warning", f"Receiver Late: {rx_metadata.strerror()}, restarting...")
                 # Radio core will be in the idle state. Issue stream command to restart streaming.
                 stream_cmd.time_spec = uhd.types.TimeSpec(
                     self.usrp.get_time_now().get_real_secs() + INIT_DELAY
@@ -124,13 +119,9 @@ class ReceiveWorker(QThread):
                 stream_cmd.stream_now = num_channels == 1
                 self.rx_streamer.issue_stream_cmd(stream_cmd)
             elif rx_metadata.error_code == uhd.types.RXMetadataErrorCode.timeout:
-                self.logEvent.emit(
-                    "warning", f"Receiver Timeout: {rx_metadata.strerror()}"
-                )
+                emit_signal(self.log_event, "warning", f"Receiver Timeout: {rx_metadata.strerror()}")
             else:
-                self.logEvent.emit(
-                    "warning", f"Receiver Error: {rx_metadata.strerror()}"
-                )
+                emit_signal(self.log_event, "warning", f"Receiver Error: {rx_metadata.strerror()}")
 
             total_samps_received += num_rx_samps
 
@@ -139,15 +130,15 @@ class ReceiveWorker(QThread):
             try:
                 self.rx_queue.put(recv_buffer)
             except queue.Full:
-                self.logEvent.emit("warning", "Rx Queue full, dropping buffer")
+                emit_signal(self.log_event, "warning", "Rx Queue full, dropping buffer")
             except queue.Empty:
-                self.logEvent.emit("debug", "Rx Queue Empty")
+                emit_signal(self.log_event, "debug", "Rx Queue Empty")
                 continue
 
         # Gracefully close once receiving is finished
         stream_cmd = uhd.types.StreamCMD(uhd.types.StreamMode.stop_cont)
         self.rx_streamer.issue_stream_cmd(stream_cmd)
-        self.logEvent.emit("debug", "Receiving Stopped")
+        emit_signal(self.log_event, "debug", "Receiving Stopped")
 
     def stop(self):
         self.running = False

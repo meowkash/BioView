@@ -15,6 +15,8 @@ class BiopacDevice(Device):
         self,
         device_name,
         config: BiopacConfiguration,
+        resp_queue,
+        data_queue, 
         save: bool = False,
         save_path=None,
         display=False,
@@ -22,6 +24,8 @@ class BiopacDevice(Device):
         super().__init__(
             device_name=device_name,
             config=config,
+            resp_queue=resp_queue,
+            data_queue=data_queue,
             device_type="biopac",
             save=save,
             save_path=save_path,
@@ -41,23 +45,24 @@ class BiopacDevice(Device):
 
     def connect(self):
         self.connect_thread = ConnectWorker(self.config)
-        self.connect_thread.initSucceeded.connect(self._on_connect_succeess)
-        self.connect_thread.initFailed.connect(self._on_connect_failure)
-        self.connect_thread.logEvent.connect(self._log_message)
+        self.connect_thread.init_succeeeded = self._on_connect_succeess
+        self.connect_thread.init_failed = self._on_connect_failure
+        self.connect_thread.log_event = self.log_event
 
         self.connect_thread.start()
         self.connect_thread.wait()
 
     def run(self):
         if self.handler is None:
-            self.logEvent.emit("error", "No BIOPAC object found")
+            self.log_event("error", "No BIOPAC object found")
             return
 
         # Start receiving
         self.threads["Receive"] = ReceiveWorker(
             biopac=self.handler, config=self.config, rx_queue=self.rx_queue
         )
-
+        self.threads["Receive"].log_event = self.log_event
+        
         self.num_channels = len(self.config.channels)
 
         # Start saving
@@ -76,7 +81,7 @@ class BiopacDevice(Device):
                 data_queue=self.display_queue,
                 running=True,
             )
-            self.threads["Display"].dataReady.connect(self._update_display)
+            self.threads["Display"].data_ready = self.data_ready
 
         # Start threads
         super().run()
@@ -84,14 +89,8 @@ class BiopacDevice(Device):
     def stop(self):
         return super().stop()
 
-    def balance_gains(self):
-        pass
-
-    def sweep_frequency(self):
-        pass
-
     def _on_connect_succeess(self, biopac):
         self.handler = biopac
 
         # Update status bar
-        self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
+        self.connection_state_changed(ConnectionStatus.CONNECTED)

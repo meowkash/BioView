@@ -1,7 +1,7 @@
 import uhd
-from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.utils import (
+    emit_signal,
     check_channels,
     get_usrp_address,
     setup_pps,
@@ -10,13 +10,15 @@ from bioview.utils import (
 )
 
 
-class ConnectWorker(QThread):
-    initSucceeded = pyqtSignal(uhd.usrp.MultiUSRP, object, object)
-    initFailed = pyqtSignal(str)
-    logEvent = pyqtSignal(str, str)
-
+class ConnectWorker:
     def __init__(self, config, parent=None):
         super().__init__(parent)
+        # Signals 
+        self.init_succeeded = None 
+        self.init_failed = None 
+        self.log_event = None 
+        
+        # Variables 
         self.config = config
         self.usrp = None
 
@@ -40,15 +42,15 @@ class ConnectWorker(QThread):
 
             # Set the reference clock - Return on failure
             if not setup_ref(self.usrp, self.config.clock, self.usrp.get_num_mboards()):
-                self.initFailed.emit("Unable to lock reference clock")
+                emit_signal(self.init_failed, "Unable to lock reference clock")
                 return
-            self.logEvent.emit("debug", "Reference Locked")
+            emit_signal(self.log_event, "debug", "Reference Locked")
 
             # Set the PPS source - Return on failure
             if not setup_pps(self.usrp, self.config.pps, self.usrp.get_num_mboards()):
-                self.initFailed.emit("Unable to lock timing source")
+                emit_signal(self.init_failed, "Unable to lock timing source")
                 return
-            self.logEvent.emit("debug", "Timing Source Locked")
+            emit_signal(self.log_event, "debug", "Timing Source Locked")
 
             # At this point, we can assume our device has valid and locked clock and PPS
             rx_channels, tx_channels = check_channels(
@@ -56,12 +58,10 @@ class ConnectWorker(QThread):
             )
             if not rx_channels and not tx_channels:
                 # If the check returned two empty channel lists, that means something went wrong
-                self.initFailed.emit(
-                    "Mismatch between channel configuration specified and actual channels available on device"
-                )
+                emit_signal(self.init_failed, "Mismatch between channel configuration specified and actual channels available on device")
                 return
 
-            self.logEvent.emit("debug", "Channels Validated")
+            emit_signal(self.log_event, "debug", "Channels Validated")
 
             samp_rate = self.config.samp_rate
             carrier_freq = self.config.carrier_freq
@@ -73,7 +73,7 @@ class ConnectWorker(QThread):
                 self.usrp.set_rx_freq(carrier_freq, chan)
                 self.usrp.set_rx_gain(rx_gain[idx], chan)
                 self.usrp.set_rx_antenna("RX2", chan)
-            self.logEvent.emit("debug", "Rx Channels Configured")
+            emit_signal(self.log_event, "debug", "Rx Channels Configured")
 
             # Setup Tx channels   v
             tx_gain = self.config.tx_gain
@@ -82,7 +82,7 @@ class ConnectWorker(QThread):
                 self.usrp.set_tx_freq(carrier_freq, chan)
                 self.usrp.set_tx_gain(tx_gain[idx], chan)
                 self.usrp.set_tx_antenna("TX1", chan)
-            self.logEvent.emit("debug", "Tx Channels Configured")
+            emit_signal(self.log_event, "debug", "Tx Channels Configured")
 
             # Setup streamer objects
             stream_args = uhd.usrp.StreamArgs(
@@ -95,8 +95,8 @@ class ConnectWorker(QThread):
             stream_args.channels = rx_channels
             self.rx_streamer = self.usrp.get_rx_stream(stream_args)
 
-            self.logEvent.emit("debug", f"Connected to USRP: {addr}")
+            emit_signal(self.log_event, "debug", f"Connected to USRP: {addr}")
             # Emit success
-            self.initSucceeded.emit(self.usrp, self.tx_streamer, self.rx_streamer)
+            emit_signal(self.init_succeeded, self.usrp, self.tx_streamer, self.rx_streamer)
         except Exception as e:
-            self.initFailed.emit(f"Unable to initialize device: {e}")
+            emit_signal(self.init_failed, f"Unable to initialize device: {e}")

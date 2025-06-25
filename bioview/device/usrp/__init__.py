@@ -1,9 +1,9 @@
 from .config import MultiUsrpConfiguration, UsrpConfiguration
 from .device import MultiUsrpDevice
 
-def get_device_object(device_name, config, save=False, save_path=None):
+def get_device_object(device_name, config, resp_queue, data_queue, save=False, save_path=None):
     return MultiUsrpDevice(
-        device_name=device_name, config=config, save=save, save_path=save_path
+        device_name=device_name, config=config, resp_queue=resp_queue, data_queue=data_queue, save=save, save_path=save_path
     )
 
 

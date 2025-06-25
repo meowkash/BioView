@@ -4,14 +4,6 @@ A collection of commands that can be sent to and responses that can be received 
 import time 
 from enum import Enum 
 
-class CommandType(Enum): 
-    CONNECT = 'connect' # Init 
-    START = 'start' # Start data acquisition
-    STOP = 'stop' # Stop data acquisition
-    SAVE = 'save' # Enable/disable saving 
-    SET_PARAM = 'set_param' # Update configuration parameter 
-    DISCONNECT = 'disconnect' # Disconnect and remove 
-
 class Message:
     def __init__(self, msg_type, value=None, id=None):
         self.msg_type = msg_type
@@ -25,3 +17,11 @@ class ResponseType(Enum):
     INFO = 'info' # Information to be logged
     WARNING = 'warning' # Warnings to be shown 
     DEBUG = 'debug' # Debugging
+    
+class CommandType(Enum): 
+    CONNECT = 'connect' # Init 
+    START = 'start' # Start data acquisition
+    STOP = 'stop' # Stop data acquisition
+    SAVE = 'save' # Enable/disable saving 
+    SET_PARAM = 'set_param' # Update configuration parameter 
+    DISCONNECT = 'disconnect' # Disconnect and remove 

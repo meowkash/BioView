@@ -2,15 +2,13 @@ import math
 
 import numpy as np
 import uhd
-from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.constants import INIT_DELAY
+from bioview.utils import emit_signal
 from .config import UsrpConfiguration
 
 
-class TransmitWorker(QThread):
-    logEvent = pyqtSignal(str, str)
-
+class TransmitWorker:
     def __init__(
         self,
         config: UsrpConfiguration,
@@ -20,6 +18,9 @@ class TransmitWorker(QThread):
         parent=None,
     ):
         super().__init__(parent)
+        # Signals 
+        self.log_event = None 
+        
         # Modifiable params
         self.tx_gain = config.get_param("tx_gain").copy()
         self.tx_amplitude = config.get_param("tx_amplitude")
@@ -75,7 +76,7 @@ class TransmitWorker(QThread):
             )
 
     def run(self):
-        self.logEvent.emit("debug", "Transmission Started")
+        emit_signal(self.log_event, "debug", "Transmission Started")
         tx_metadata = uhd.types.TXMetadata()
         tx_metadata.start_of_burst = True
         tx_metadata.end_of_burst = False
@@ -90,10 +91,7 @@ class TransmitWorker(QThread):
             if curr_tx_gain != self.tx_gain:
                 for chan in self.config.tx_channels:
                     self.usrp.set_tx_gain(curr_tx_gain[chan], chan)
-                self.logEvent.emit(
-                    "debug",
-                    f"Tx gain updated to {curr_tx_gain}. Current {self.tx_gain}",
-                )
+                emit_signal(self.log_event, "debug", f"Tx gain updated to {curr_tx_gain}. Current {self.tx_gain}")
                 self.tx_gain = curr_tx_gain
 
             try:
@@ -101,7 +99,7 @@ class TransmitWorker(QThread):
                 buffer_iter = self.tx_waveform
                 num_samps = self.tx_streamer.send(buffer_iter, tx_metadata)
             except RuntimeError as ex:
-                self.logEvent.emit("error", f"Runtime error in transmit: {ex}")
+                emit_signal(self.log_event, "error", f"Runtime error in transmit: {ex}")
                 continue
 
             # Continue transmission
@@ -109,12 +107,12 @@ class TransmitWorker(QThread):
             tx_metadata.has_time_spec = False
 
             if num_samps < self.tx_buffer_size:
-                self.logEvent.emit("warning", f"Tx Sent only {num_samps} samples")
+                emit_signal(self.log_event, "warning", f"Tx Sent only {num_samps} samples")
 
         # End transmission
         tx_metadata.end_of_burst = True
         self.tx_streamer.send(np.zeros_like(self.tx_waveform), tx_metadata)
-        self.logEvent.emit("debug", "Transmission Stopped")
+        emit_signal(self.log_event, "debug", "Transmission Stopped")
 
     def stop(self):
         self.running = False

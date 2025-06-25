@@ -1,12 +1,10 @@
 import queue
 
-from PyQt6.QtCore import QThread
-
 from bioview.types import ExperimentConfiguration
 from bioview.utils import init_save_file, update_save_file
 from .config import BiopacConfiguration
 
-class ProcessWorker(QThread):
+class ProcessWorker:
     def __init__(
         self,
         exp_config: ExperimentConfiguration,
@@ -17,6 +15,10 @@ class ProcessWorker(QThread):
         parent=None,
     ):
         super().__init__(parent=parent)
+        # Signals
+        self.log_event = None 
+        
+        # Variables
         self.exp_config = exp_config
 
         self.rx_queue = rx_queue
@@ -39,22 +41,22 @@ class ProcessWorker(QThread):
                 try:
                     self.disp_queue.put(samples)
                 except queue.Empty:
-                    self.logEvent.emit("debug", "[BIOPAC] Display Queue Empty")
+                    self.log_event("debug", "[BIOPAC] Display Queue Empty")
                 except queue.Full:
-                    self.logEvent.emit("debug", "[BIOPAC] Display Queue Full")
+                    self.log_event("debug", "[BIOPAC] Display Queue Full")
 
                 # Save to file
                 if self.saving:
                     update_save_file(self.out_file, samples)
 
             except queue.Empty:
-                self.logEvent.emit("debug", "[BIOPAC] Rx Queue Empty")
+                self.log_event("debug", "[BIOPAC] Rx Queue Empty")
                 continue
             except queue.Full:
-                self.logEvent.emit("debug", "[BIOPAC] Rx Queue Full")
+                self.log_event("debug", "[BIOPAC] Rx Queue Full")
                 continue
             except Exception as e:
-                self.logEvent.emit("error", f"[BIOPAC] Saving error: {e}")
+                self.log_event("error", f"[BIOPAC] Saving error: {e}")
                 continue
 
     def stop(self):

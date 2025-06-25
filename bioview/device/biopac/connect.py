@@ -1,17 +1,16 @@
 from ctypes import byref, c_double, c_int
 
-from PyQt6.QtCore import QThread, pyqtSignal
-
-from bioview.utils import load_mpdev_dll, wrap_result_code
+from bioview.utils import load_mpdev_dll, wrap_result_code, emit_signal
 
 
-class ConnectWorker(QThread):
-    initSucceeded = pyqtSignal(object)
-    initFailed = pyqtSignal(str)
-    logEvent = pyqtSignal(str, str)
-
+class ConnectWorker:
     def __init__(self, config, parent=None):
         super().__init__(parent)
+        # Define signals - These are connected in parent
+        self.init_succeeded = None 
+        self.log_event = None 
+        self.init_failed = None 
+        
         self.config = config
         self.biopac = None
 
@@ -19,9 +18,7 @@ class ConnectWorker(QThread):
         # Load the DLL
         self.biopac = load_mpdev_dll(self.config.mpdev_path)
         if self.biopac is None:
-            self.logEvent.emit(
-                "mpdev.dll was not found. Ensure it is available in either the system path or the custom path provided"
-            )
+            emit_signal(self.log_event, "error", "mpdev.dll was not found. Ensure it is available in either the system path or the custom path provided")
             return
 
         # Connect to the device - Currently, the types values are hard-coded but they needed to be taken from the device name
@@ -46,13 +43,13 @@ class ConnectWorker(QThread):
             )
 
             # Emit device to main app
-            self.initSucceeded.emit(self.biopac)
+            emit_signal(self.init_succeeded, self.biopac)
         except Exception as e:
-            self.initFailed.emit(f"Unable to initialize device: {e}")
+            emit_signal(self.init_failed, f"Unable to initialize device: {e}")
 
     def close(self):
         # Cleanup device handler
         try:
             wrap_result_code(self.biopac.disconnectMPDev())
         except Exception:
-            self.logEvent.emit("info", "BIOPAC connection already closed")
+            emit_signal(self.log_event, "info", "BIOPAC connection already closed")

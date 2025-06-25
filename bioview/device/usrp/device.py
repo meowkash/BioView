@@ -6,7 +6,7 @@ from bioview.types import (
     ConnectionStatus,
     DataSource
 )
-from bioview.utils import get_channel_map
+from bioview.utils import get_channel_map, emit_signal
 
 from .config import MultiUsrpConfiguration, UsrpConfiguration
 from .connect import ConnectWorker
@@ -19,6 +19,8 @@ class MultiUsrpDevice(Device):
         self,
         device_name,
         config: MultiUsrpConfiguration,
+        resp_queue, 
+        data_queue, 
         save=False,
         save_path=None,
         display=True,
@@ -26,6 +28,8 @@ class MultiUsrpDevice(Device):
         super().__init__(
             device_name=device_name,
             config=config,
+            resp_queue=resp_queue,
+            data_queue=data_queue,
             device_type="multi_usrp",
             save=save,
             save_path=save_path,
@@ -40,8 +44,8 @@ class MultiUsrpDevice(Device):
         for dev_name, dev_cfg in config.devices.items():
             dev_handler = UsrpDevice(device_name=dev_name, config=dev_cfg)
             self.if_filter_bw.extend(dev_cfg.get_filter_bw())
-            dev_handler.logEvent.connect(self._log_message)
-            dev_handler.connectionStateChanged.connect(
+            dev_handler.log_event = self.log_event
+            dev_handler.connection_state_changed = self.connection_state_changed(
                 lambda value, dev_name=dev_name: self._on_state_update(
                     device=dev_name, new_state=value
                 )
@@ -102,7 +106,7 @@ class MultiUsrpDevice(Device):
                 break
 
         if inited:
-            self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
+            emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTED)
 
     def connect(self):
         for handler in self.handler.values():
@@ -146,7 +150,7 @@ class MultiUsrpDevice(Device):
                 data_queue=self.display_queue,
                 running=True,
             )
-            self.threads["Display"].dataReady.connect(self._update_display)
+            self.threads["Display"].data_ready = self.data_ready
 
         # Start threads
         super().run()
@@ -170,30 +174,30 @@ class UsrpDevice(Device):
 
     def connect(self):
         self.connect_thread = ConnectWorker(self.config)
-        self.connect_thread.initSucceeded.connect(
-            lambda usrp, tx_streamer, rx_streamer: self._on_connect_success(
+        self.connect_thread.init_succeeded = lambda usrp, tx_streamer, rx_streamer: self._on_connect_success(
                 usrp=usrp, tx_streamer=tx_streamer, rx_streamer=rx_streamer
             )
-        )
 
-        self.connect_thread.initFailed.connect(self._on_connect_failure)
-        self.connect_thread.logEvent.connect(self._log_message)
-        super().connectionStateChanged.emit(ConnectionStatus.CONNECTING)
+        self.connect_thread.init_failed = self._on_connect_failure
+        self.connect_thread.log_event = self.log_event
+        
+        # Let frontend know we are connecting
+        emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTING)
 
         self.connect_thread.start()
         self.connect_thread.wait()
 
     def run(self):
         if self.handler is None:
-            self.logEvent.emit("error", "No USRP object found")
+            emit_signal(self.log_event, "error", "No USRP object found")
             return
 
         if self.tx_streamer is None:
-            self.logEvent.emit("error", "No USRP Tx streamer found")
+            emit_signal(self.log_event, "error", "No USRP Tx streamer found")
             return
 
         if self.rx_streamer is None:
-            self.logEvent.emit("error", "No USRP Rx streamer found")
+            emit_signal(self.log_event, "error", "No USRP Rx streamer found")
             return
 
         # Create transmitter thread
@@ -227,4 +231,4 @@ class UsrpDevice(Device):
         self.rx_streamer = rx_streamer
 
         # Update status bar
-        self.connectionStateChanged.emit(ConnectionStatus.CONNECTED)
+        emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTED)

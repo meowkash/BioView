@@ -2,6 +2,7 @@
 from bioview import constants as constants
 from bioview import types as types
 from bioview import ui as ui
+from bioview import listeners as listeners 
 
 # Optional functionality with third-party dependencies
 try:

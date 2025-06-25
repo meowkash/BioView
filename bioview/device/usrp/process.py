@@ -1,14 +1,11 @@
 import queue
 
 import numpy as np
-from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.utils import apply_filter, get_filter
+from bioview.utils import apply_filter, get_filter, emit_signal
 from .config import MultiUsrpConfiguration
 
-class ProcessWorker(QThread):
-    logEvent = pyqtSignal(str, str)
-
+class ProcessWorker:
     def __init__(
         self,
         config: MultiUsrpConfiguration,
@@ -21,6 +18,10 @@ class ProcessWorker(QThread):
         running: bool = False,
     ):
         super().__init__()
+        # Signals 
+        self.log_event = None 
+        
+        # Variables 
         self.config = config
         self.rx_queues = rx_queues
         self.save_queue = save_queue
@@ -65,9 +66,7 @@ class ProcessWorker(QThread):
             # Check for significant discontinuity
             discontinuity = abs(data[0] - source.last_samples)
             if discontinuity > 3 * np.std(data[: min(100, len(data))]):
-                self.logEvent.emit(
-                    "debug", f"Potential discontinuity detected in {source.channel}"
-                )
+                emit_signal(self.log_event, "debug", f"Potential discontinuity detected in {source.channel}")
 
         # Store last sample for next buffer
         if not hasattr(source, "last_samples"):
@@ -138,7 +137,7 @@ class ProcessWorker(QThread):
                 if_freq=self.channel_ifs[source.tx_idx],
             )
 
-            self.logEvent.emit("debug", f"Processed channel {source.channel}")
+            emit_signal(self.log_event, "debug", f"Processed channel {source.channel}")
 
             if self.config.get_param("save_imaginary"):
                 save_list[source.channel, :, 0] = first_comp
@@ -188,9 +187,9 @@ class ProcessWorker(QThread):
                 if self.save_queue is not None:
                     try:
                         self.save_queue.put(processed)
-                        self.logEvent.emit("debug", "[USRP] Added to save queue")
+                        emit_signal(self.log_event, "debug", "[USRP] Added to save queue")
                     except queue.Full:
-                        self.logEvent.emit("debug", "[USRP] Save Queue Full")
+                        emit_signal(self.log_event, "debug", "[USRP] Save Queue Full")
 
                 # Add to display queue
                 try:
@@ -203,21 +202,21 @@ class ProcessWorker(QThread):
                             self.disp_queue.put(processed[:, :, 1])
                         else:
                             self.disp_queue.put(processed[:, :, 0])
-                        self.logEvent.emit("debug", "[USRP] Added to display queue")
+                        emit_signal(self.log_event, "debug", "[USRP] Added to display queue")
                 except queue.Full:
-                    self.logEvent.emit("debug", "[USRP] Display Queue Full")
+                    emit_signal(self.log_event, "debug", "[USRP] Display Queue Full")
 
             except queue.Empty:
-                self.logEvent.emit("debug", "[USRP] Rx Queue Empty")
+                emit_signal(self.log_event, "debug", "[USRP] Rx Queue Empty")
                 continue
             except queue.Full:
-                self.logEvent.emit("debug", "[USRP] Rx Queue Full")
+                emit_signal(self.log_event, "debug", "[USRP] Rx Queue Full")
                 continue
             except Exception as e:
-                self.logEvent.emit("error", f"[USRP] Processing error: {e}")
+                emit_signal(self.log_event, "error", f"[USRP] Processing error: {e}")
                 continue
 
-        self.logEvent.emit("debug", "[USRP] Processing stopped")
+        emit_signal(self.log_event, "debug", "[USRP] Processing stopped")
 
     def stop(self):
         self.running = False

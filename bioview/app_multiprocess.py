@@ -1,24 +1,21 @@
 # A multi-processing version of the old controller.
 import logging
 import multiprocessing
-import time
 from pathlib import Path
 from threading import Thread
 
-import numpy as np
-from PyQt6.QtCore import QMutex, QObject, pyqtSignal
+from PyQt6.QtCore import QMutex
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
 from bioview.device.common import InstructionWorker
-from bioview.device import DeviceProcess, MultiUsrpConfiguration
+from bioview.device import MultiUsrpConfiguration
 from bioview.types import (
     CommandType,
     ConnectionStatus,
     DataSource,
     ExperimentConfiguration,
     Message,
-    ResponseType,
     RunningStatus,
 )
 from bioview.ui import (
@@ -31,46 +28,7 @@ from bioview.ui import (
     TextDialog,
     UsrpDeviceConfigPanel,
 )
-
-
-class ResponseListener(QObject):
-    logEvent = pyqtSignal(str, str)  # (Level, Message)
-    dataReady = pyqtSignal(np.ndarray, DataSource)  # (Data, Source)
-    connectionStateChanged = pyqtSignal(str, ConnectionStatus)  # (Device Name, State)
-
-    # Signals to send to the main thread
-    def __init__(self, data_queue: multiprocessing.Queue, parent=None):
-        super().__init__(parent)
-        self.data_queue = data_queue
-
-    def start(self):
-        self.running = True
-        while self.running:
-            try:
-                resp = self.data_queue.get(timeout=2)
-                if not isinstance(resp, Message):
-                    raise TypeError(
-                        f"Expected response to be of type bioview.types.Message but got {type(resp)} instead"
-                    )
-
-                if resp.msg_type == ResponseType.ERROR:
-                    self.logEvent.emit("error", resp.value)
-                elif resp.msg_type == ResponseType.WARNING:
-                    self.logEvent.emit("warning", resp.value)
-                elif resp.msg_type == ResponseType.INFO:
-                    self.logEvent.emit("info", resp.value)
-                elif resp.msg_type == ResponseType.DEBUG:
-                    self.logEvent.emit("debug", resp.value)
-                elif resp.msg_type == ResponseType.STATUS:
-                    self.connectionStateChanged.emit(resp.value[0], resp.value[1])
-                elif resp.msg_type == ResponseType.DISPLAY:
-                    self.dataReady.emit("error", resp.value[0], resp.value[1])
-            except Exception:
-                time.sleep(0.01)
-
-    def stop(self):
-        self.running = False
-
+from bioview.listeners import BackendListener, FrontendListener
 
 class ViewerMP(QMainWindow):
     def __init__(
@@ -93,18 +51,20 @@ class ViewerMP(QMainWindow):
 
         # Create runners
         self.runners = {}
-        self.data_queue = (
-            multiprocessing.Queue()
-        )  # Everyone shares data queue as it goes into graphical display
+        # Everyone shares data queue as it goes into graphical display
+        self.data_queue = multiprocessing.Queue()
+        # Responses from all backends are shared since they are used for logging, etc
+        self.resp_queue = multiprocessing.Queue()
 
         for dev_name, dev_cfg in device_config.items():
             cmd_queue = multiprocessing.Queue()
             
-            process = DeviceProcess(
+            process = BackendListener(
                 id=dev_name,
                 config=dev_cfg,
                 exp_config=exp_config,
                 cmd_queue=cmd_queue,
+                resp_queue=self.resp_queue, 
                 data_queue=self.data_queue,
                 save=self.saving_status,
             )
@@ -136,7 +96,7 @@ class ViewerMP(QMainWindow):
         self._connect_logging()
 
         # Enable listening for IPC
-        self.listener = ResponseListener(self.data_queue)
+        self.listener = FrontendListener(self.data_queue, self.resp_queue)
         self._start_listener()
 
     def _init_ui(self):
