@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
-
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 from PyQt6.QtCore import QMutex, QMutexLocker, QObject, QThread, pyqtSignal
 
