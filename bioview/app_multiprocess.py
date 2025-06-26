@@ -318,7 +318,12 @@ class ViewerMP(QMainWindow):
         if inited:
             self.running_status = RunningStatus.STOPPED
             self.connection_status = ConnectionStatus.CONNECTED
-            self.update_buttons()
+        else: 
+            # Init failed
+            self.running_status = RunningStatus.NOINIT
+            self.connection_status = ConnectionStatus.DISCONNECTED
+        
+        self.update_buttons()
 
     def update_running_status(self, state):
         self.running_status = state
@@ -331,14 +336,6 @@ class ViewerMP(QMainWindow):
         self.experiment_settings_panel.update_button_states(
             self.connection_status, self.running_status
         )
-
-    def on_init_failure(self, error_message):
-        self.running_status = RunningStatus.NOINIT
-        self.connection_status = ConnectionStatus.DISCONNECTED
-        self.update_buttons()
-
-        self.log_display_panel.log_message("error", error_message)
-        self.usrp = None
 
     def handle_time_window_change(self, seconds):
         self.plot_grid.set_display_time(seconds)

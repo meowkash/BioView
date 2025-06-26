@@ -75,15 +75,15 @@ class BiopacDevice(Device):
             self.config.absolute_channel_nums[idx] = idx
 
     def connect(self):
-        self.connect_worker.start()
+        self.connect_worker.run()
 
     def run(self):
         if self.receive_worker is not None:
-            self.receive_worker.start() 
+            self.receive_worker.run() 
         if self.save_worker is not None: 
-            self.save_worker.start()
+            self.save_worker.run()
         if self.display_worker is not None: 
-            self.display_worker.start()
+            self.display_worker.run()
 
     def stop(self):
         if self.receive_worker is not None:
