@@ -42,17 +42,59 @@ class MultiUsrpDevice(Device):
         self.if_filter_bw = []
 
         for dev_name, dev_cfg in config.devices.items():
-            dev_handler = UsrpDevice(device_name=dev_name, config=dev_cfg)
-            self.if_filter_bw.extend(dev_cfg.get_filter_bw())
+            dev_handler = UsrpDeviceWrapper(device_name=dev_name, config=dev_cfg)
+            
+            # Connect callbacks 
             dev_handler.log_event = self.log_event
-            dev_handler.connection_state_changed = self.connection_state_changed(
-                lambda value, dev_name=dev_name: self._on_state_update(
-                    device=dev_name, new_state=value
-                )
-            )
+            dev_handler.connection_state_changed = self.connection_state_changed
 
+            # Initialize state 
             self.handler[dev_name] = dev_handler
             self.state[dev_name] = ConnectionStatus.DISCONNECTED
+            
+            # Update filter BW
+            self.if_filter_bw.extend(dev_cfg.get_filter_bw())
+        
+        # Make workers for saving/display
+        self.process_worker = ProcessWorker(
+            config=self.config,
+            channel_ifs=self.channel_ifs,
+            if_filter_bw=self.if_filter_bw,
+            data_sources=self.data_sources,
+            rx_queues=[x.rx_queue for x in self.handler.values()],
+            save_queue=self.save_queue,
+            disp_queue=self.display_queue,
+            running=True,
+        )
+        self.process_worker.log_event = self.log_event
+        
+        if self.config.get_param("save_phase", True):
+            self.num_channels = 2 * len(self.data_sources)
+        else:
+            self.num_channels = len(self.data_sources)
+
+        if self.save and self.save_path is not None:
+            self.save_worker = SaveWorker(
+                save_path=self.save_path,
+                data_queue=self.save_queue,
+                num_channels=self.num_channels,
+                running=True,
+            )
+            self.save_worker.log_event = self.log_event
+        else:
+            self.save_worker = None 
+
+        # Create display thread
+        if self.display:
+            self.display_worker = DisplayWorker(
+                config=self.config,
+                data_queue=self.display_queue,
+                running=True,
+            )
+            self.display_worker.data_ready = self.data_ready
+            self.display_worker.log_event = self.log_event
+        else:
+            self.display_worker = None 
 
     def _populate_data_sources(self):
         """
@@ -118,106 +160,72 @@ class MultiUsrpDevice(Device):
             handler.run()
 
         # Start processing
-        self.threads["Process"] = ProcessWorker(
-            config=self.config,
-            channel_ifs=self.channel_ifs,
-            if_filter_bw=self.if_filter_bw,
-            data_sources=self.data_sources,
-            rx_queues=[x.rx_queue for x in self.handler.values()],
-            save_queue=self.save_queue,
-            disp_queue=self.display_queue,
-            running=True,
-        )
-
+        self.process_worker.start()
+        
         # Start saving
-        if self.config.get_param("save_phase", True):
-            self.num_channels = 2 * len(self.data_sources)
-        else:
-            self.num_channels = len(self.data_sources)
-
-        if self.save and self.save_path is not None:
-            self.threads["Save"] = SaveWorker(
-                save_path=self.save_path,
-                data_queue=self.save_queue,
-                num_channels=self.num_channels,
-                running=True,
-            )
-
-        # Create display thread
-        if self.display:
-            self.threads["Display"] = DisplayWorker(
-                config=self.config,
-                data_queue=self.display_queue,
-                running=True,
-            )
-            self.threads["Display"].data_ready = self.data_ready
-
-        # Start threads
-        super().run()
+        if self.save_worker is not None:
+            self.save_worker.start() 
+        
+        # Start display             
+        if self.display_worker is not None:
+            self.display_worker.start()
 
     def stop(self):
+        # Stop transceiving
         for handler in self.handler.values():
             handler.stop()
 
-        for thread in self.threads.values():
-            thread.stop()
+        # Stop threads 
+        self.process_worker.stop() 
+        
+        if self.save_worker is not None:
+            self.save_worker.stop() 
+        
+        if self.display_worker is not None:
+            self.display_worker.stop()
 
-
-class UsrpDevice(Device):
+class UsrpDeviceWrapper:
     def __init__(self, device_name, config: UsrpConfiguration):
-        super().__init__(device_name=device_name, config=config, device_type="usrp")
-
+        super().__init__()
+        # Signals 
+        self.log_event = None 
+        self.connection_state_changed = None
+        
+        # Variables 
+        self.device_name = device_name
+        self.config = config
         self.rx_queue = queue.Queue()
-
-    def _populate_data_sources(self):
-        pass  # No fancy data source mapping is needed here
+        
+        # Connect Worker
+        self.connect_worker = ConnectWorker(self.config)
+        self.connect_worker.init_succeeded = self._on_connect_success
+        self.connect_worker.init_failed = self._on_connect_failure
+        self.connect_worker.log_event = self.log_event
+        
+        # Tx/Rx workers 
+        self.transmit_worker = None 
+        self.receive_worker = None 
 
     def connect(self):
-        self.connect_thread = ConnectWorker(self.config)
-        self.connect_thread.init_succeeded = lambda usrp, tx_streamer, rx_streamer: self._on_connect_success(
-                usrp=usrp, tx_streamer=tx_streamer, rx_streamer=rx_streamer
-            )
-
-        self.connect_thread.init_failed = self._on_connect_failure
-        self.connect_thread.log_event = self.log_event
-        
         # Let frontend know we are connecting
         emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTING)
-
-        self.connect_thread.start()
-        self.connect_thread.wait()
+        self.connect_worker.daemon = True 
+        # Start thread
+        self.connect_worker.start()
 
     def run(self):
-        if self.handler is None:
-            emit_signal(self.log_event, "error", "No USRP object found")
-            return
-
-        if self.tx_streamer is None:
-            emit_signal(self.log_event, "error", "No USRP Tx streamer found")
-            return
-
-        if self.rx_streamer is None:
-            emit_signal(self.log_event, "error", "No USRP Rx streamer found")
-            return
-
-        # Create transmitter thread
-        self.threads["Transmit"] = TransmitWorker(
-            config=self.config, usrp=self.handler, tx_streamer=self.tx_streamer
-        )
-
-        # Create receiver thread
-        self.threads["Receive"] = ReceiveWorker(
-            usrp=self.handler,
-            config=self.config,
-            rx_streamer=self.rx_streamer,
-            rx_queue=self.rx_queue,
-            running=True,
-        )
-
-        super().run()
+        if self.transmit_worker is None or self.receive_worker is None: 
+            return 
+        
+        # Start streaming
+        self.transmit_worker.start()
+        self.receive_worker.start()         
 
     def stop(self):
-        return super().stop()
+        if self.transmit_worker is not None: 
+            self.transmit_worker.stop()
+        if self.receive_worker is not None: 
+            self.receive_worker.stop()
 
     def balance_gains(self):
         pass
@@ -226,9 +234,40 @@ class UsrpDevice(Device):
         pass
 
     def _on_connect_success(self, usrp, tx_streamer, rx_streamer, idx=0):
+        if usrp is None:
+            emit_signal(self.log_event, "error", "No USRP object found")
+            return
+
+        if tx_streamer is None:
+            emit_signal(self.log_event, "error", "No USRP Tx streamer found")
+            return
+
+        if rx_streamer is None:
+            emit_signal(self.log_event, "error", "No USRP Rx streamer found")
+            return
+        
         self.handler = usrp
         self.tx_streamer = tx_streamer
         self.rx_streamer = rx_streamer
 
+        # Make Tx/Rx workers
+        self.transmit_worker = TransmitWorker(config=self.config, 
+                                              usrp=self.handler, 
+                                              tx_streamer=self.tx_streamer)
+        self.transmit_worker.log_event = self.log_event
+        
+        self.receive_worker = ReceiveWorker(
+            usrp=self.handler,
+            config=self.config,
+            rx_streamer=self.rx_streamer,
+            rx_queue=self.rx_queue,
+            running=True,
+        )
+        self.receive_worker.log_event = self.log_event
+        
         # Update status bar
         emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTED)
+
+    def _on_connect_failure(self, msg): 
+        emit_signal(self.log_event, "error", msg)
+        emit_signal(self.connection_state_changed, ConnectionStatus.DISCONNECTED)

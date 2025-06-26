@@ -7,10 +7,11 @@ from .datasource import DataSource
 from .status import ConnectionStatus
 from .ipc import Message, ResponseType
 
+from bioview.utils import emit_signal
+
 class Device:
     def __init__(
         self,
-        proc_id: str, 
         config: Configuration,
         device_name: str,
         device_type: str,
@@ -21,8 +22,7 @@ class Device:
         display=True,
     ):
         super().__init__()
-        self.proc_id = proc_id 
-        self.device_name = device_name
+        self.device_name = device_name # This serves as ID
         self.config = config
         self.device_type = device_type
 
@@ -31,8 +31,6 @@ class Device:
         self.data_queue = data_queue
         
         self.handler = None
-
-        self.threads = {}
 
         # Configuration for saving
         self.save = save
@@ -71,7 +69,7 @@ class Device:
             print('Unable to add to response queue as it is full.')
     
     def connection_state_changed(self, status: ConnectionStatus):
-        resp = Message(msg_type=ResponseType.STATUS, value=(self.proc_id, status))
+        resp = Message(msg_type=ResponseType.STATUS, value=(getattr(self, 'device_name', 0), status))
         
         try: 
             self.resp_queue.put_nowait(resp)
@@ -96,17 +94,14 @@ class Device:
         raise NotImplementedError
 
     def run(self):
-        for thread in self.threads.values():
-            thread.log_event = self.log_event
-            thread.start()
+        raise NotImplementedError
 
     def stop(self):
-        for thread in self.threads.values():
-            thread.stop()
+        raise NotImplementedError
 
     def _on_connect_success(self):
-        self.connection_state_changed(ConnectionStatus.CONNECTED)
+        emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTED)
 
     def _on_connect_failure(self, msg):
-        self.log_event("error", msg)
-        self.connection_state_changed(ConnectionStatus.DISCONNECTED)
+        emit_signal(self.log_event, "error", msg)
+        emit_signal(self.connection_state_changed, ConnectionStatus.DISCONNECTED)

@@ -1,7 +1,7 @@
 import queue
 
 from bioview.types import Device
-from bioview.device.common import DisplayWorker, SaveWorker
+from bioview.device.common import SaveWorker, DisplayWorker
 from bioview.types import ConnectionStatus, DataSource
 from .config import BiopacConfiguration
 
@@ -31,8 +31,39 @@ class BiopacDevice(Device):
             save_path=save_path,
             display=display,
         )
-
         self.rx_queue = queue.Queue()
+
+        # Workers
+        self.connect_worker = ConnectWorker(self.config)
+        self.connect_worker.init_succeeded = self._on_connect_succeess
+        self.connect_worker.init_failed = self._on_connect_failure
+        self.connect_worker.log_event = self.log_event
+
+        self.receive_worker = None 
+        
+        # Save/Display Workers
+        self.num_channels = len(self.config.channels)
+        if self.save and self.save_path is not None:
+            self.save_worker = SaveWorker(
+                save_path=self.save_path,
+                data_queue=self.save_queue,
+                num_channels=self.num_channels,
+                running=True,
+            )
+            self.save_worker.log_event = self.log_event
+        else:
+            self.save_worker = None 
+            
+        if self.display and self.display_sources is not None:
+            self.display_worker = DisplayWorker(
+                config=self.config,
+                data_queue=self.display_queue,
+                running=True,
+            )
+            self.display_worker.data_ready = self.data_ready
+            self.display_worker.log_event = self.log_event
+        else: 
+            self.display_worker = None 
 
     def _populate_data_sources(self):
         # Generate channel labels:data queue index mapping alongwith absolute channel numbers
@@ -44,53 +75,37 @@ class BiopacDevice(Device):
             self.config.absolute_channel_nums[idx] = idx
 
     def connect(self):
-        self.connect_thread = ConnectWorker(self.config)
-        self.connect_thread.init_succeeeded = self._on_connect_succeess
-        self.connect_thread.init_failed = self._on_connect_failure
-        self.connect_thread.log_event = self.log_event
-
-        self.connect_thread.start()
-        self.connect_thread.wait()
+        self.connect_worker.start()
 
     def run(self):
-        if self.handler is None:
-            self.log_event("error", "No BIOPAC object found")
-            return
-
-        # Start receiving
-        self.threads["Receive"] = ReceiveWorker(
-            biopac=self.handler, config=self.config, rx_queue=self.rx_queue
-        )
-        self.threads["Receive"].log_event = self.log_event
-        
-        self.num_channels = len(self.config.channels)
-
-        # Start saving
-        if self.save and self.save_path is not None:
-            self.threads["Save"] = SaveWorker(
-                save_path=self.save_path,
-                data_queue=self.save_queue,
-                num_channels=self.num_channels,
-                running=True,
-            )
-
-        # Create display thread
-        if self.display and self.display_sources is not None:
-            self.threads["Display"] = DisplayWorker(
-                config=self.config,
-                data_queue=self.display_queue,
-                running=True,
-            )
-            self.threads["Display"].data_ready = self.data_ready
-
-        # Start threads
-        super().run()
+        if self.receive_worker is not None:
+            self.receive_worker.start() 
+        if self.save_worker is not None: 
+            self.save_worker.start()
+        if self.display_worker is not None: 
+            self.display_worker.start()
 
     def stop(self):
-        return super().stop()
+        if self.receive_worker is not None:
+            self.receive_worker.stop() 
+        if self.save_worker is not None: 
+            self.save_worker.stop()
+        if self.display_worker is not None: 
+            self.display_worker.stop()
 
     def _on_connect_succeess(self, biopac):
         self.handler = biopac
+        
+        if self.handler is None:
+            self.log_event("error", "No BIOPAC object found")
+            self.connection_state_changed(ConnectionStatus.DISCONNECTED)
+            return
 
+        # Start receiving
+        self.receive_worker = ReceiveWorker(
+            biopac=self.handler, config=self.config, rx_queue=self.rx_queue
+        )
+        self.receive_worker.log_event = self.log_event
+        
         # Update status bar
         self.connection_state_changed(ConnectionStatus.CONNECTED)

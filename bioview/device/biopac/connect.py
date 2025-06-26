@@ -4,13 +4,14 @@ from bioview.utils import load_mpdev_dll, wrap_result_code, emit_signal
 
 
 class ConnectWorker:
-    def __init__(self, config, parent=None):
-        super().__init__(parent)
-        # Define signals - These are connected in parent
+    def __init__(self, config):
+        super().__init__()
+        # Signals
         self.init_succeeded = None 
         self.log_event = None 
         self.init_failed = None 
         
+        # Variables
         self.config = config
         self.biopac = None
 
@@ -47,7 +48,7 @@ class ConnectWorker:
         except Exception as e:
             emit_signal(self.init_failed, f"Unable to initialize device: {e}")
 
-    def close(self):
+    def stop(self):
         # Cleanup device handler
         try:
             wrap_result_code(self.biopac.disconnectMPDev())

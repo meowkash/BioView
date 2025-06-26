@@ -1,11 +1,11 @@
 import queue
-
+import threading
 import numpy as np
 
 from bioview.utils import apply_filter, get_filter, emit_signal
 from .config import MultiUsrpConfiguration
 
-class ProcessWorker:
+class ProcessWorker(threading.Thread):
     def __init__(
         self,
         config: MultiUsrpConfiguration,

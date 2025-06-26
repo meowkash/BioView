@@ -1,5 +1,5 @@
 import queue
-
+import threading
 import numpy as np
 import uhd
 
@@ -9,17 +9,16 @@ from bioview.utils import emit_signal
 from .config import UsrpConfiguration
 
 
-class ReceiveWorker:
+class ReceiveWorker(threading.Thread):
     def __init__(
         self,
         usrp,
         config: UsrpConfiguration,
         rx_streamer,
         rx_queue,
-        running: bool = True,
-        parent=None,
+        running: bool = True
     ):
-        super().__init__(parent)
+        super().__init__()
         # Signals 
         self.log_event = None 
         

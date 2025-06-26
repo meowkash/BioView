@@ -1,4 +1,5 @@
 import uhd
+import threading
 
 from bioview.utils import (
     emit_signal,
@@ -10,9 +11,9 @@ from bioview.utils import (
 )
 
 
-class ConnectWorker:
-    def __init__(self, config, parent=None):
-        super().__init__(parent)
+class ConnectWorker(threading.Thread):
+    def __init__(self, config):
+        super().__init__()
         # Signals 
         self.init_succeeded = None 
         self.init_failed = None 
@@ -77,7 +78,7 @@ class ConnectWorker:
 
             # Setup Tx channels   v
             tx_gain = self.config.tx_gain
-            for chan in tx_channels:
+            for idx, chan in enumerate(tx_channels):
                 self.usrp.set_tx_rate(samp_rate, chan)
                 self.usrp.set_tx_freq(carrier_freq, chan)
                 self.usrp.set_tx_gain(tx_gain[idx], chan)

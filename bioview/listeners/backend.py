@@ -1,3 +1,4 @@
+import queue
 import multiprocessing as mp
 
 from bioview.types import Configuration, ExperimentConfiguration, CommandType, Message, DataSource, ResponseType, ConnectionStatus
@@ -69,7 +70,10 @@ class BackendListener(mp.Process):
                     msg_type=ResponseType.ERROR,
                     value=str(e),
                 )
-                self.respond(resp)
+                try: 
+                    self.resp_queue.put_nowait(resp)
+                except queue.Full: 
+                    print('Unable to add to response queue as it is full.')
 
     def stop(self):
         self.running = False

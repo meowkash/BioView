@@ -1,5 +1,5 @@
 import math
-
+import threading
 import numpy as np
 import uhd
 
@@ -8,16 +8,15 @@ from bioview.utils import emit_signal
 from .config import UsrpConfiguration
 
 
-class TransmitWorker:
+class TransmitWorker(threading.Thread):
     def __init__(
         self,
         config: UsrpConfiguration,
         usrp,
         tx_streamer,
-        running: bool = True,
-        parent=None,
+        running: bool = True
     ):
-        super().__init__(parent)
+        super().__init__()
         # Signals 
         self.log_event = None 
         

@@ -1,20 +1,19 @@
 import queue
-
+import threading
 from bioview.types import ExperimentConfiguration
 from bioview.utils import init_save_file, update_save_file
 from .config import BiopacConfiguration
 
-class ProcessWorker:
+class ProcessWorker(threading.Thread):
     def __init__(
         self,
         exp_config: ExperimentConfiguration,
         bio_config: BiopacConfiguration,
         rx_queue: queue.Queue,
         disp_queue: queue.Queue,
-        running: bool = False,
-        parent=None,
+        running: bool = False
     ):
-        super().__init__(parent=parent)
+        super().__init__()
         # Signals
         self.log_event = None 
         
