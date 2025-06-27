@@ -9,7 +9,7 @@ import json
 import time
 import os
 import sys
-import threading
+from threading import Thread
 import multiprocessing as mp
 import traceback
 from enum import Enum
@@ -390,7 +390,7 @@ class ClientHandler:
             time.sleep(0.5)
             self.stop()
         
-        threading.Thread(target=stop_server, daemon=True).start()
+        Thread(target=stop_server, daemon=True).start()
         
         return {
             'type': ResponseType.SUCCESS.value,

@@ -1,5 +1,5 @@
 import uhd
-import threading
+from threading import Thread
 
 from bioview.utils import (
     emit_signal,
@@ -11,7 +11,7 @@ from bioview.utils import (
 )
 
 
-class ConnectWorker(threading.Thread):
+class ConnectWorker(Thread):
     def __init__(self, config):
         super().__init__()
         # Signals 

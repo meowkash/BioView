@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from bioview.constants import CLOCK_TIMEOUT
-from bioview.types import DataSource
+from bioview.datatypes import DataSource
 
 
 def _check_pairing(r_idx, t_idx, rx_cumsum, tx_cumsum, pair_list):

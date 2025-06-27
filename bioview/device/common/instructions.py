@@ -5,7 +5,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 from PyQt6.QtCore import QMutex, QMutexLocker, QObject, QThread, pyqtSignal
 
-from bioview.types import ExperimentConfiguration
+from bioview.datatypes import ExperimentConfiguration
 
 
 # Each instruction handler should be its own QObject

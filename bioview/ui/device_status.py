@@ -2,7 +2,7 @@ from PyQt6.QtCore import QEvent, QMutex, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from bioview.types import ConnectionStatus
+from bioview.datatypes import ConnectionStatus
 
 
 class LEDIndicator(QWidget):

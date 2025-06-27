@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
 )
 
-from bioview.types import (
+from bioview.datatypes import (
     ConnectionStatus,
     DataSource,
     ExperimentConfiguration,

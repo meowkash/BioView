@@ -1,8 +1,8 @@
 import queue
 
-from bioview.types import Device
+from bioview.datatypes import Device
 from bioview.device.common import SaveWorker, DisplayWorker
-from bioview.types import ConnectionStatus, DataSource
+from bioview.datatypes import ConnectionStatus, DataSource
 from .config import BiopacConfiguration
 
 # Core functionality that should always be available

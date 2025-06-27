@@ -1,10 +1,10 @@
 import queue
-import threading
-from bioview.types import ExperimentConfiguration
+from threading import Thread
+from bioview.datatypes import ExperimentConfiguration
 from bioview.utils import init_save_file, update_save_file
 from .config import BiopacConfiguration
 
-class ProcessWorker(threading.Thread):
+class ProcessWorker(Thread):
     def __init__(
         self,
         exp_config: ExperimentConfiguration,

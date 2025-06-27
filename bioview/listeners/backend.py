@@ -1,7 +1,7 @@
 import queue
 import multiprocessing as mp
 
-from bioview.types import Configuration, ExperimentConfiguration, CommandType, Message, DataSource, ResponseType, ConnectionStatus
+from bioview.datatypes import Configuration, ExperimentConfiguration, CommandType, Message, DataSource, ResponseType, ConnectionStatus
 from bioview.device import get_device_object
 
 class BackendListener(mp.Process):

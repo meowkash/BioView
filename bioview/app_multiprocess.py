@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, Q
 
 from bioview.device.common import InstructionWorker
 from bioview.device import MultiUsrpConfiguration
-from bioview.types import (
+from bioview.datatypes import (
     CommandType,
     ConnectionStatus,
     DataSource,

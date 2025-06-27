@@ -7,7 +7,7 @@ from PyQt6.QtCore import QEvent, QTimer, pyqtSignal
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QGridLayout, QWidget
 
-from bioview.types import DataSource
+from bioview.datatypes import DataSource
 from bioview.utils import get_color_by_idx
 
 

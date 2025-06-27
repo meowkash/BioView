@@ -3,7 +3,7 @@ import queue
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from bioview.types import Configuration, DataSource
+from bioview.datatypes import Configuration, DataSource
 from bioview.utils import apply_filter, get_filter
 
 

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, Q
 
 from bioview.device import get_device_object
 from bioview.device.common import InstructionWorker
-from bioview.types import (
+from bioview.datatypes import (
     ConnectionStatus,
     DataSource,
     ExperimentConfiguration,

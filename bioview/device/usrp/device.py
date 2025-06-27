@@ -1,8 +1,8 @@
 import queue
 
-from bioview.types import Device
+from bioview.datatypes import Device
 from bioview.device.common import DisplayWorker, SaveWorker
-from bioview.types import (
+from bioview.datatypes import (
     ConnectionStatus,
     DataSource
 )

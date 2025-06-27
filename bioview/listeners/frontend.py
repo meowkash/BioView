@@ -3,7 +3,7 @@ import numpy as np
 import multiprocessing as mp
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from bioview.types import DataSource, ConnectionStatus, Message, ResponseType
+from bioview.datatypes import DataSource, ConnectionStatus, Message, ResponseType
 
 class FrontendListener(QObject):
     logEvent = pyqtSignal(str, str)  # (Level, Message)

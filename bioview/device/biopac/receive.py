@@ -1,10 +1,10 @@
 import queue
 from ctypes import byref, c_double
-import threading
+from threading import Thread
 from .config import BiopacConfiguration
 from bioview.utils import wrap_result_code
 
-class ReceiveWorker(threading.Thread):
+class ReceiveWorker(Thread):
     def __init__(
         self,
         biopac,

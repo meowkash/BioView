@@ -1,4 +1,4 @@
-from bioview.types import ExperimentConfiguration
+from bioview.datatypes import ExperimentConfiguration
 
 from .usrp import MultiUsrpConfiguration, UsrpConfiguration
 from .biopac import BiopacConfiguration
