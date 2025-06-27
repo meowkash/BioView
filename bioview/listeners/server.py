@@ -10,6 +10,7 @@ import time
 import os
 import sys
 import threading
+import multiprocessing as mp
 import traceback
 from enum import Enum
 
@@ -31,6 +32,7 @@ if sys.platform == "win32":
             except Exception as e:
                 print(f"✗ Failed to add DLL path {path}: {e}")
 
+
 class CommandType(Enum):
     PING = "ping"
     DISCOVER_DEVICES = "discover_devices"
@@ -46,18 +48,13 @@ class ResponseType(Enum):
     INFO = "info"
     DEBUG = "debug"
 
-class UHDServer:
+class Listener:
     def __init__(self, host='localhost', port=9999):
         self.host = host
         self.port = port
         self.socket = None
         self.running = False
-        self.uhd_imported = False
-        self.uhd = None
-        self.usrp = None
-        self.tx_streamer = None
-        self.rx_streamer = None
-        self.device_info = None
+        self.client_handlers = []  
         
     def start(self):
         """Start the UHD server"""
@@ -79,12 +76,19 @@ class UHDServer:
                     print(f"Client connected from {address}")
                     
                     # Handle client in a new thread
-                    client_thread = threading.Thread(
-                        target=self.handle_client,
+                    # client_thread = threading.Thread(
+                    #     target=self.handle_client,
+                    #     args=(client_socket,),
+                    #     daemon=True
+                    # )
+                    # client_thread.start()
+                    client_process = mp.Process(
+                        target=self.prepare_client_handler,
                         args=(client_socket,),
                         daemon=True
                     )
-                    client_thread.start()
+                    self.client_handlers.append(client_process)
+                    client_process.start()
                     
                 except Exception as e:
                     if self.running:
@@ -97,21 +101,48 @@ class UHDServer:
     
     def stop(self):
         """Stop the server"""
+        self.terminate_client_handlers()
         print("Stopping UHD Server...")
         self.running = False
         if self.socket:
             self.socket.close()
         print("Server stopped")
     
-    def handle_client(self, client_socket):
-        """Handle individual client connection"""
+    def prepare_client_handler(self, client_socket):
+        client_obj = ClientHandler()
+        client_obj.start(client_socket)
+
+    def terminate_client_handlers(self):
+        "Implement gracefull termination for all client handlers"
+        pass
+    
+
+"""
+Client Handler - Standalone process that handles all Signal & Data operations
+to and from a client (client can be a GUI or CLI)
+Run this separately to debug UHD issues in isolation
+"""
+
+class ClientHandler:
+    def __init__(self):
+        self.tx_streamer = None
+        self.rx_streamer = None
+        self.running = False
+        self.device_sockets = []
+        self.device_handlers = []
+    
+    def start(self, client_socket):
+        "Start the Client Handler"
+        print('Starting the client server')
+
         try:
+            self.running = True
+            
             while self.running:
-                # Receive command
                 data = client_socket.recv(4096)
                 if not data:
                     break
-                
+
                 try:
                     command = json.loads(data.decode('utf-8'))
                     print(f"Received command: {command.get('type', 'unknown')}")
@@ -129,13 +160,14 @@ class UHDServer:
                         'message': f"Invalid JSON: {e}"
                     }
                     client_socket.send(json.dumps(error_response).encode('utf-8'))
-                    
+                except Exception as e:
+                    print(f"Client Handler error: {e}")
+        
         except Exception as e:
             print(f"Client handler error: {e}")
         finally:
-            client_socket.close()
-            print("Client disconnected")
-    
+            self.stop(client_socket)
+        
     def process_command(self, command):
         """Process incoming commands"""
         cmd_type = command.get('type')
@@ -364,13 +396,62 @@ class UHDServer:
             'type': ResponseType.SUCCESS.value,
             'message': 'Server shutting down'
         }
+    
+    
+    def stop(self, client_socket):
+        '''
+        Stop the Client Handler. This is a graceful termination
+        So, any pending actions are completed before termination 
+        
+        '''
+        for device_process in self.device_handlers:
+            " Code to terminate the device process"
+            pass
+        self.running = False
+        client_socket.close()
+        print('The Client Handler stopped')
+
+
+"""
+Device Handler - Standalone process that interfaces with the device
+
+The DeviceHandler() class maintains all necessary device info 
+& can also read & write data to & from the device 
+along with storing the read data in a data dump in storage
+
+Run this separately to debug UHD issues in isolation
+"""
+
+class DeviceHandler:
+    def __init__(self):
+        self.device_info = None
+        self.uhd_imported = False
+        self.uhd = None
+        self.usrp = None
+        self.running = False
+    
+    def start(self):
+        pass
+
+    def send(self):
+        pass
+
+    def recv(self):
+        pass
+
+    def store_data(self):
+        pass
+    
+    def stop(self):
+        pass
+
 
 def main():
     print("=" * 50)
     print("UHD Server - Standalone UHD Operations")
     print("=" * 50)
     
-    server = UHDServer()
+    server = Listener()
     
     try:
         server.start()
