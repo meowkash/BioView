@@ -9,6 +9,7 @@ from .usrp import (
     BASE_USRP_CONFIG,
 )
 from .theme import COLOR_SCHEME
+from .version import BIOVIEW_VERSION
 
 __all__ = [
     "BIOPAC_CONNECTION_CODES",
@@ -19,4 +20,5 @@ __all__ = [
     "SAVE_BUFFER_SIZE",
     "BASE_USRP_CONFIG",
     "COLOR_SCHEME",
+    "BIOVIEW_VERSION"
 ]

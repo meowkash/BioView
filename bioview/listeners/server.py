@@ -32,8 +32,7 @@ if sys.platform == "win32":
             except Exception as e:
                 print(f"✗ Failed to add DLL path {path}: {e}")
 
-
-class CommandType(Enum):
+class SupportedCommand(Enum):
     PING = "ping"
     DISCOVER_DEVICES = "discover_devices"
     CONNECT_DEVICE = "connect_device"

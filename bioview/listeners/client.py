@@ -20,21 +20,21 @@ import json
 import struct # TODO: Remove by confirming packet structure
 import socket 
 import numpy as np
+from enum import Enum
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.datatypes import Configuration
 
-SUPPORTED_COMMANDS = [
-    'ping',
-    'discover_device',
-    'connect_device', 
-    'disconnect_device', 
-    'configure_device', 
-    'start_streaming', 
-    'stop_streaming',
-    'update_param'     
-]
+class SupportedCommands(Enum): 
+    PING = 'ping'
+    DISCOVER = 'discover_device'
+    CONNECT = 'connect_device'
+    DISCONNECT = 'disconnect_device'
+    CONFIGURE = 'configure_device'
+    START = 'start_streaming'
+    STOP = 'stop_streaming'
+    UPDATE = 'update_param'     
 
 class ClientHandler(QThread):
     # Control signals that provide the functionality listed above
@@ -172,12 +172,12 @@ class ClientHandler(QThread):
             self.error_occurred.emit("Not connected to control server")
             return None
         
-        if command_type not in SUPPORTED_COMMANDS: 
+        if command_type not in SupportedCommands: 
             self.error_occurred.emit("Invalid command sent")
             return None
         
         command = {
-            'type': command_type,
+            'type': command_type.value,
             'params': params or {}
         }
         
@@ -197,7 +197,7 @@ class ClientHandler(QThread):
     
     def ping_server(self):
         """Test server connectivity"""
-        response = self.send_control_command("ping")
+        response = self.send_control_command(SupportedCommands.PING)
         
         if response and response.get('type') == 'success':
             server_info = response.get('server_info', {})
@@ -210,7 +210,7 @@ class ClientHandler(QThread):
     def discover_devices(self):
         """Discover devices"""
         self.log_message.emit("info", "Discovering devices...")
-        response = self.send_control_command("discover_device")  # Fixed: using string directly
+        response = self.send_control_command(SupportedCommands.DISCOVER)
         
         if response and response.get('type') == 'success':
             devices = response.get('devices', [])
@@ -224,7 +224,7 @@ class ClientHandler(QThread):
     def connect_to_device(self, device_args: Configuration, config=None):
         """Connect to device"""
         self.log_message.emit("info", f"Connecting to device: {device_args}")
-        response = self.send_control_command("connect_device", {
+        response = self.send_control_command(SupportedCommands.CONNECT, {
             'device_args': device_args,
             'config': config or {}
         })
@@ -247,7 +247,7 @@ class ClientHandler(QThread):
         if self.streaming_active:
             self.stop_streaming()
         
-        response = self.send_control_command("disconnect_device")
+        response = self.send_control_command(SupportedCommands.DISCONNECT)
         
         if response and response.get('type') == 'success':
             self.log_message.emit("info", "Device disconnected")
@@ -261,7 +261,7 @@ class ClientHandler(QThread):
     def start_streaming(self):
         """Start real-time data streaming"""
         self.log_message.emit("info", "Starting data streaming...")
-        response = self.send_control_command("start_streaming")
+        response = self.send_control_command(SupportedCommands.START)
         
         if response and response.get('type') == 'success':
             self.streaming_active = True
@@ -293,7 +293,7 @@ class ClientHandler(QThread):
             self.data_socket = None
             self.data_connected = False
         
-        response = self.send_control_command("stop_streaming")
+        response = self.send_control_command(SupportedCommands.STOP)
         
         if response and response.get('type') == 'success':
             self.log_message.emit("info", "Data streaming stopped")
@@ -307,7 +307,7 @@ class ClientHandler(QThread):
     def configure_device(self, config):
         """Configure device parameters"""
         self.log_message.emit("info", "Configuring device...")
-        response = self.send_control_command("configure_device", config)
+        response = self.send_control_command(SupportedCommands.CONFIGURE, config)
         
         if response and response.get('type') == 'success':
             self.log_message.emit("info", "Device configured successfully")
