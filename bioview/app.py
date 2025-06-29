@@ -1,7 +1,12 @@
+import sys 
+import logging # TODO: Remove 
+from pathlib import Path
+
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.datatypes import ConnectionStatus, RunningStatus, ExperimentConfiguration
+from bioview.datatypes import ConnectionStatus, RunningStatus, ExperimentConfiguration, DataSource
+
 from bioview.ui import (
     AnnotateEventPanel,
     AppControlPanel,
@@ -12,6 +17,7 @@ from bioview.ui import (
     TextDialog,
     UsrpDeviceConfigPanel,
 )
+from bioview.listeners import Client
 
 class VisualizerClient(QMainWindow):
     def __init__(
@@ -22,12 +28,15 @@ class VisualizerClient(QMainWindow):
         super().__init__()
         
         self.exp_config = exp_config
-        self.device_config = device_config
+        self.devices = {}
+        for device_id, device_cfg in device_config.items(): 
+            self.devices[device_id] = {
+                'config': device_cfg,
+                'state': ConnectionStatus.DISCONNECTED
+            }
 
         self.exp_config.available_channels = []
 
-        # Track state
-        self.connection_status = ConnectionStatus.DISCONNECTED
         self.running_status = RunningStatus.NOINIT
         self.saving_status = False
 
@@ -44,15 +53,16 @@ class VisualizerClient(QMainWindow):
         # Set up UI
         self.init_ui()
         self.setup_client()
+        
         ### Common Threads
         self.instructions_thread = None
 
         ### Data Queues
-        self.usrp_disp_queue = queue.Queue(maxsize=10000)
+        # self.disp_queue = queue.Queue(maxsize=10000)
 
         # Enable Logging
         self._connect_logging()
-        self._connect_display()
+        # self._connect_display()
     
     def init_ui(self):
         # Define main wndow
@@ -85,13 +95,13 @@ class VisualizerClient(QMainWindow):
         controls_layout.addWidget(self.app_control_panel, stretch=1)
 
         # Connect signal handlers
-        self.app_control_panel.connectionInitiated.connect(self.start_initialization)
-        self.app_control_panel.startRequested.connect(self.start_recording)
-        self.app_control_panel.stopRequested.connect(self.stop_recording)
+        self.app_control_panel.connectionInitiated.connect(self.handle_connection_requested)
+        self.app_control_panel.startRequested.connect(self.handle_streaming_start_requested)
+        self.app_control_panel.stopRequested.connect(self.handle_streaming_stop_requested)
         self.app_control_panel.saveRequested.connect(self.update_save_state)
         self.app_control_panel.instructionsEnabled.connect(self.toggle_instructions)
-        self.app_control_panel.balanceRequested.connect(self.perform_gain_balancing)
-        self.app_control_panel.sweepRequested.connect(self.perform_frequency_sweep)
+        # self.app_control_panel.balanceRequested.connect(self.perform_gain_balancing)
+        # self.app_control_panel.sweepRequested.connect(self.perform_frequency_sweep)
 
         experiment_layout = QHBoxLayout()
 
@@ -114,9 +124,9 @@ class VisualizerClient(QMainWindow):
 
         # USRP Device Config Panel(s)
         usrp_cfg = []
-        for handler in self.device_handlers.values():
-            if handler.device_type == "multi_usrp":
-                usrp_cfg = handler.config.devices.values()
+        for device_dict in self.devices.values():
+            if type(device_dict['config']).__name__ == 'MultiUsrpConfiguration': 
+                usrp_cfg = device_dict["config"].get_individual_configs()
 
         self.usrp_config_panel = [None] * len(usrp_cfg)
         for idx, cfg in enumerate(usrp_cfg):
@@ -150,24 +160,159 @@ class VisualizerClient(QMainWindow):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.device_status_panel = DeviceStatusPanel(self.device_states)
+        self.device_status_panel = DeviceStatusPanel(self.devices)
         # Add device status panel to status bar (on the right side)
         self.status_bar.addPermanentWidget(self.device_status_panel)
         # Add some info text to status bar
         self.status_bar.showMessage("Ready")
 
+    def _connect_logging(self):
+        self.plot_grid.logEvent.connect(self.log_display_panel.log_message)
+        for _, panel in enumerate(self.usrp_config_panel):
+            panel.logEvent.connect(self.log_display_panel.log_message)
+        
     def setup_client(self):
-        pass 
+        """Connect to client"""
+        self.client_worker = Client()
+        
+        # Connect signals
+        self.client_worker.server_connected.connect(self.on_server_connected)
+        self.client_worker.server_disconnected.connect(self.on_server_disconnected)
+        self.client_worker.error_occurred.connect(lambda msg: self.log_display_panel.log_message("error", msg))
+        self.client_worker.log_message.connect(self.log_display_panel.log_message)
+        
+        # self.client_worker.streaming_started.connect(self.on_streaming_started)
+        # self.client_worker.streaming_stopped.connect(self.on_streaming_stopped)
+        self.client_worker.device_connected.connect(self.handle_device_connected)
+        self.client_worker.device_connection_failed.connect(self.handle_device_connection_failed)
+        self.client_worker.device_disconnected.connect(self.handle_device_disconnected)
     
+        # Start client
+        self.client_worker.start_client()
+        
+    def closeEvent(self, event):
+        """Handle application close"""
+        if self.client_worker:
+            self.client_worker.stop_client()
+        event.accept()
+    
+    # Handlers for UI updates
+    def handle_time_window_change(self, seconds):
+        self.plot_grid.set_display_time(seconds)
+
+    def handle_grid_layout_change(self, rows, cols):
+        self.plot_grid.update_grid(rows, cols)
+
+    def handle_add_source(self, source: DataSource):
+        if self.plot_grid.add_source(source):
+            # Update a
+            sel_channels = self.exp_config.get_param("display_sources")
+            sel_channels.append(source)
+            self.exp_config.set_param("display_sources", list(set(sel_channels)))
+            # Change state of UI
+            self.experiment_settings_panel.update_source("add", source)
+
+    def handle_remove_source(self, source: DataSource):
+        if self.plot_grid.remove_source(source):
+            # Update config
+            sel_channels = self.exp_config.get_param("display_sources")
+            sel_channels.remove(source)
+            self.exp_config.set_param("display_sources", sel_channels)
+            # Change state of UI
+            self.experiment_settings_panel.update_source("remove", source)
+    
+    # State update handlers 
+    def on_server_connected(self):
+        """Handle server connection"""
+        self.device_status_panel.update_server_status(True)
+        self.log_display_panel.log_message("info", "Connected to server")
+        
+        # Auto-ping
+        if self.client_worker:
+            self.client_worker.ping_server()
+    
+    def on_server_disconnected(self):
+        """Handle server disconnection"""
+        self.device_status_panel.update_server_status(False)
+        self.log_display_panel.log_message("warning", "Disconnected from server")
+        
+    def handle_connection_requested(self): 
+        if self.client_worker: 
+            for device_id in self.devices.keys(): 
+                self.device_status_panel.update_device_state(device_id, ConnectionStatus.CONNECTING)
+                self.client_worker.connect_device(device_id=device_id)
+    
+    def handle_device_connected(self, device_id):         
+        if device_id is not None:
+            self.devices[device_id]['state'] = ConnectionStatus.CONNECTED
+            self.device_status_panel.update_device_state(device_id, ConnectionStatus.CONNECTED)
+        else:
+            # In this case all devices were requested for connection 
+            for device_id in self.devices.keys():
+                self.devices[device_id]['state'] = ConnectionStatus.CONNECTED
+                self.device_status_panel.update_device_state(device_id, ConnectionStatus.CONNECTED)
+        
+        # Check if all are connected and if so, disable UI buttons 
+        self.update_buttons()
+        
+    def handle_device_connection_failed(self, device_id): 
+        if device_id is not None:
+            self.devices[device_id]['state'] = ConnectionStatus.DISCONNECTED
+            self.device_status_panel.update_device_state(device_id, ConnectionStatus.DISCONNECTED)
+        else:
+            # In this case all devices were requested for connection 
+            for device_id in self.devices.keys():
+                self.devices[device_id]['state'] = ConnectionStatus.DISCONNECTED
+                self.device_status_panel.update_device_state(device_id, ConnectionStatus.DISCONNECTED)
+          
+        self.update_buttons()
+      
+    def handle_device_disconnected(self): 
+        # Disconnect devices
+        for device_id in self.devices.keys(): 
+            self.devices[device_id]['state'] = ConnectionStatus.DISCONNECTED
+            self.device_status_panel.update_device_state(device_id, ConnectionStatus.DISCONNECTED)
+      
+        self.update_buttons()
+       
+    def handle_streaming_start_requested(self): 
+        if self.client_worker: 
+            self.client_worker.start_streaming()
+            self.running_status = RunningStatus.RUNNING
+    
+    def handle_streaming_stop_requested(self): 
+        if self.client_worker: 
+            self.client_worker.stop_streaming()
+            self.running_status = RunningStatus.STOPPED
+     
+    def update_save_state(self):
+        self.saving_status = True  
+        if self.client_worker: 
+            pass 
+    
+    def toggle_instructions(self, flag):
+        self.enable_instructions = flag
+        if self.instruction_dialog is not None:
+            self.instruction_dialog.toggle_ui(self.enable_instructions)
+    
+    def update_buttons(self): 
+        connected = True 
+        for device_dict in self.devices.values(): 
+            if device_dict['state'] == ConnectionStatus.DISCONNECTED: 
+                connected = False 
+                break 
+        
+        if connected: 
+            self.app_control_panel.update_button_states(ConnectionStatus.CONNECTED, RunningStatus.STOPPED)
+        else: 
+            self.app_control_panel.update_button_states(ConnectionStatus.DISCONNECTED, RunningStatus.NOINIT)
+    
+     
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Create and show main window
     window = VisualizerClient()
     window.show()
-    
-    # Add startup messages
-    window.log_panel.add_log_message("info", f"Welcome to BioView Device Discovery Version {BIOVIEW_VERSION}")
-    window.log_panel.add_log_message("warning", "Make sure a compatible backend server is running!")
     
     sys.exit(app.exec())

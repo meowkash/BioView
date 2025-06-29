@@ -342,7 +342,7 @@ class DeviceDiscoveryClient(QMainWindow):
     def on_server_connected(self):
         """Handle server connection"""
         self.status_panel.update_server_status(True)
-        self.log_panel.add_log_message("info", "Connected to streaming server")
+        self.log_panel.add_log_message("info", "Connected to server")
         
         # Auto-ping
         if self.client_worker:

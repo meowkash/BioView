@@ -25,7 +25,7 @@ import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from bioview.datatypes import Configuration
-from .protocol import Command, MAX_BUFFER_SIZE
+from .protocol import Command, Response, MAX_BUFFER_SIZE
 
 SUPPORTED_COMMANDS = [
     Command.PING,
@@ -42,7 +42,8 @@ class Client(QThread):
     # Control signals that provide the functionality listed above
     server_connected = pyqtSignal()
     server_disconnected = pyqtSignal()
-    device_connected = pyqtSignal(dict)
+    device_connected = pyqtSignal(str)
+    device_connection_failed = pyqtSignal(str)
     device_disconnected = pyqtSignal()
     streaming_started = pyqtSignal()
     streaming_stopped = pyqtSignal()
@@ -223,22 +224,19 @@ class Client(QThread):
             self.error_occurred.emit(f"Device discovery failed: {error_msg}")
             return []
     
-    def connect_to_device(self, device_id, device_config: Configuration):
+    def connect_device(self, device_id = None):
         """Connect to device"""
-        self.log_message.emit("info", f"Connecting to device: {device_id}")
-        response = self.send_control_command(Command.CONNECT, {
-            'device_id': device_id,
-            'config': device_config.to_json()
-        })
+        self.log_message.emit("info", f"Connecting...")
+        response = self.send_control_command(Command.CONNECT, {'id': device_id})
         
-        if response and response.get('type') == 'success':
-            device_info = response.get('device_info', {})
+        if response and response.get('type') == Response.SUCCESS.value:
             self.log_message.emit("info", "Device connected successfully")
-            self.device_connected.emit(device_info)
+            self.device_connected.emit(device_id)
             return True
         else:
             error_msg = response.get('message', 'Unknown error') if response else 'No response'
             self.error_occurred.emit(f"Device connection failed: {error_msg}")
+            self.device_connection_failed.emit(device_id)
             return False
     
     def disconnect_device(self):
@@ -318,7 +316,10 @@ class Client(QThread):
             error_msg = response.get('message', 'Unknown error') if response else 'No response'
             self.error_occurred.emit(f"Configuration failed: {error_msg}")
             return False
-
+        
+    def update_params(self, config): 
+        pass 
+    
 class DataStreamer(QThread): 
     log_message = pyqtSignal(str, str)
     data_received = pyqtSignal(np.ndarray)

@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QEvent, QMutex, QTimer
+from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
@@ -76,8 +76,12 @@ class DeviceStatusPanel(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(15)
 
-        self.mutex = QMutex()
-
+        # Add server status 
+        self.server_status = QLabel("Server: Disconnected")
+        self.server_status.setStyleSheet("color: red; font-weight: bold;")
+        self.layout.addWidget(self.server_status)
+        self.layout.addWidget(QLabel("|"))
+        
         # Add device widgets
         for device_name, device_map in self.devices.items():
             device_state = device_map["state"]
@@ -85,6 +89,15 @@ class DeviceStatusPanel(QWidget):
 
         self.setLayout(self.layout)
 
+    def update_server_status(self, connected):
+        """Update server status"""
+        if connected:
+            self.server_status.setText("Server: Connected")
+            self.server_status.setStyleSheet("color: green; font-weight: bold;")
+        else:
+            self.server_status.setText("Server: Disconnected")
+            self.server_status.setStyleSheet("color: red; font-weight: bold;")
+    
     # Handle theme changes
     def _update_icons(self):
         for device_name, device_state in self.devices.items():
