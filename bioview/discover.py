@@ -304,7 +304,7 @@ class DeviceDiscoveryClient(QMainWindow):
     
     def setup_client(self):
         """Connect to client"""
-        self.client_worker = ClientHandler()
+        self.client_worker = Client()
         
         # Connect signals
         self.client_worker.server_connected.connect(self.on_server_connected)

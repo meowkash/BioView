@@ -27,7 +27,7 @@ from bioview.constants import BIOVIEW_VERSION
 from bioview.datatypes import Configuration
 from bioview.device import get_device_object
 
-from .protocol import Command, Response, MAX_BUFFER_SIZE
+from bioview.listeners.protocol import Command, Response, MAX_BUFFER_SIZE
 
 SUPPORTED_COMMANDS = [
     Command.PING,
@@ -495,7 +495,6 @@ class DeviceHandler(mp.Process):
     def update_param(self, param, value): 
         self.device.update_param(param, value)
     
-    def update_ 
 if __name__ == "__main__":
     print("=" * 50)
     print(f"BioView Device Server, Version: {BIOVIEW_VERSION}")

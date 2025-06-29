@@ -32,11 +32,17 @@ def discover_devices():
     devices = []
     
     # For all backends, this will discover devices
-    from .usrp import discover_devices
-    devices.extend(discover_devices())
+    try:     
+        from .usrp import discover_devices
+        devices.extend(discover_devices())
+    except Exception as e: 
+        print(f'Error getting USRP devices: {e}')
     
-    from .biopac import discover_devices
-    devices.extend(discover_devices())
+    try: 
+        from .biopac import discover_devices
+        devices.extend(discover_devices())
+    except Exception as e: 
+        print(f'Error getting BIOPAC devices: {e}')
     
     return devices
     
