@@ -15,7 +15,10 @@ import queue
 import numpy as np
 import struct
 from enum import Enum
-from typing import Dict, List, Any, Optional
+import uhd 
+from bioview.device import discover_devices
+
+print(sys.modules.keys())
 
 # Windows DLL setup
 if sys.platform == "win32":
@@ -37,7 +40,7 @@ if sys.platform == "win32":
 
 class CommandType(Enum):
     PING = "ping"
-    DISCOVER_DEVICES = "discover_devices"
+    DISCOVER_DEVICES = "discover_device"
     CONNECT_DEVICE = "connect_device"
     DISCONNECT_DEVICE = "disconnect_device"
     CONFIGURE_DEVICE = "configure_device"
@@ -269,7 +272,7 @@ class StreamingDataServer:
     
     def handle_discover_devices(self):
         """Handle device discovery"""
-        print("🔍 Starting UHD device discovery...")
+        print("🔍 Starting device discovery...")
         
         if not self.uhd_imported:
             try:

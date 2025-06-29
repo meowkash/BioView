@@ -13,7 +13,7 @@ from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont, QTextCursor, QGuiApplication, QIcon
 
 from bioview.constants import BIOVIEW_VERSION
-from bioview.listeners import ClientHandler
+from bioview.listeners import Client
 
 class DeviceConfigDialog(QDialog):
     """Device configuration dialog"""

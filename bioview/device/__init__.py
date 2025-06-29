@@ -28,4 +28,16 @@ def get_device_object(device_name, config, resp_queue, data_queue, save, exp_con
             save_path=exp_config.get_save_path(device_name),
         )
 
-__all__ = ["MultiUsrpConfiguration", "UsrpConfiguration", "BiopacConfiguration", "get_device_object"]
+def discover_devices(): 
+    devices = []
+    
+    # For all backends, this will discover devices
+    from .usrp import discover_devices
+    devices.extend(discover_devices())
+    
+    from .biopac import discover_devices
+    devices.extend(discover_devices())
+    
+    return devices
+    
+__all__ = ["MultiUsrpConfiguration", "UsrpConfiguration", "BiopacConfiguration", "get_device_object", "discover_devices"]

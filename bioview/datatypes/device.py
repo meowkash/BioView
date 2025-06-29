@@ -91,7 +91,7 @@ class Device:
         return self.config.get_disp_freq()
 
     def connect(self):
-        raise NotImplementedError
+        self.state = ConnectionStatus.CONNECTED
 
     def run(self):
         raise NotImplementedError
@@ -99,6 +99,19 @@ class Device:
     def stop(self):
         raise NotImplementedError
 
+    def disconnect(self):
+        self.state = ConnectionStatus.DISCONNECTED
+    
+    def update_param(self, param, value): 
+        current_type = type(getattr(self, param, None))
+        if current_type is not None:
+            setattr(self, param, current_type(value))
+        else:
+            setattr(self, param, value)
+        
+    def update_config(self, param, value):
+        self.config.set_param(param, value) 
+            
     def _on_connect_success(self):
         emit_signal(self.connection_state_changed, ConnectionStatus.CONNECTED)
 
