@@ -2,7 +2,7 @@ import qtawesome as qta
 from PyQt6.QtWidgets import QGroupBox, QPushButton, QHBoxLayout, QLabel, QCheckBox
 from PyQt6.QtCore import pyqtSignal, QEvent
 
-from bioview.types import ConnectionStatus, RunningStatus
+from bioview.datatypes import ConnectionStatus, RunningStatus
 from bioview.utils import get_qcolor
 
 

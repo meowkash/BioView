@@ -7,6 +7,7 @@ from .caches import (
     update_mpdev_path,
 )
 from .filter import get_filter, apply_filter
+from .ipc import emit_signal
 from .storage import get_unique_path, init_save_file, update_save_file
 from .theme import get_color_by_idx, get_color_tuple, get_qcolor
 from .usrp import get_channel_map, setup_pps, setup_ref, check_channels
@@ -20,6 +21,7 @@ __all__ = [
     "update_mpdev_path",
     "get_filter",
     "apply_filter",
+    "emit_signal",
     "get_unique_path",
     "init_save_file",
     "update_save_file",

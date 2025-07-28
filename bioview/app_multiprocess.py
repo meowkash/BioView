@@ -1,26 +1,24 @@
 # A multi-processing version of the old controller.
 import logging
 import multiprocessing
-import time
 from pathlib import Path
 from threading import Thread
 
-import numpy as np
-from PyQt6.QtCore import QMutex, QObject, pyqtSignal
+from PyQt6.QtCore import QMutex
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QStatusBar, QVBoxLayout, QWidget
 
-from bioview.device import DeviceProcess, MultiUsrpConfiguration
-from bioview.device.common import InstructionWorker
-from bioview.types import (
+from bioview.datatypes import (
     CommandType,
     ConnectionStatus,
     DataSource,
     ExperimentConfiguration,
     Message,
-    ResponseType,
     RunningStatus,
 )
+from bioview.device import MultiUsrpConfiguration
+from bioview.device.common import InstructionWorker
+from bioview.listeners import BackendListener, FrontendListener
 from bioview.ui import (
     AnnotateEventPanel,
     AppControlPanel,
@@ -31,45 +29,6 @@ from bioview.ui import (
     TextDialog,
     UsrpDeviceConfigPanel,
 )
-
-
-class ResponseListener(QObject):
-    logEvent = pyqtSignal(str, str)  # (Level, Message)
-    dataReady = pyqtSignal(np.ndarray, DataSource)  # (Data, Source)
-    connectionStateChanged = pyqtSignal(str, ConnectionStatus)  # (Device Name, State)
-
-    # Signals to send to the main thread
-    def __init__(self, data_queue: multiprocessing.Queue, parent=None):
-        super().__init__(parent)
-        self.data_queue = data_queue
-
-    def start(self):
-        self.running = True
-        while self.running:
-            try:
-                resp = self.data_queue.get(timeout=2)
-                if not isinstance(resp, Message):
-                    raise TypeError(
-                        f"Expected response to be of type bioview.types.Message but got {type(resp)} instead"
-                    )
-
-                if resp.msg_type == ResponseType.ERROR:
-                    self.logEvent.emit("error", resp.value)
-                elif resp.msg_type == ResponseType.WARNING:
-                    self.logEvent.emit("warning", resp.value)
-                elif resp.msg_type == ResponseType.INFO:
-                    self.logEvent.emit("info", resp.value)
-                elif resp.msg_type == ResponseType.DEBUG:
-                    self.logEvent.emit("debug", resp.value)
-                elif resp.msg_type == ResponseType.STATUS:
-                    self.connectionStateChanged.emit(resp.value[0], resp.value[1])
-                elif resp.msg_type == ResponseType.DISPLAY:
-                    self.dataReady.emit("error", resp.value[0], resp.value[1])
-            except Exception:
-                time.sleep(0.01)
-
-    def stop(self):
-        self.running = False
 
 
 class ViewerMP(QMainWindow):
@@ -93,18 +52,20 @@ class ViewerMP(QMainWindow):
 
         # Create runners
         self.runners = {}
-        self.data_queue = (
-            multiprocessing.Queue()
-        )  # Everyone shares data queue as it goes into graphical display
+        # Everyone shares data queue as it goes into graphical display
+        self.data_queue = multiprocessing.Queue()
+        # Responses from all backends are shared since they are used for logging, etc
+        self.resp_queue = multiprocessing.Queue()
 
         for dev_name, dev_cfg in device_config.items():
             cmd_queue = multiprocessing.Queue()
 
-            process = DeviceProcess(
+            process = BackendListener(
                 id=dev_name,
                 config=dev_cfg,
                 exp_config=exp_config,
                 cmd_queue=cmd_queue,
+                resp_queue=self.resp_queue,
                 data_queue=self.data_queue,
                 save=self.saving_status,
             )
@@ -136,7 +97,7 @@ class ViewerMP(QMainWindow):
         self._connect_logging()
 
         # Enable listening for IPC
-        self.listener = ResponseListener(self.data_queue)
+        self.listener = FrontendListener(self.data_queue, self.resp_queue)
         self._start_listener()
 
     def _init_ui(self):
@@ -356,7 +317,12 @@ class ViewerMP(QMainWindow):
         if self.check_if_connect_succeeded():
             self.running_status = RunningStatus.STOPPED
             self.connection_status = ConnectionStatus.CONNECTED
-            self.update_buttons()
+        else:
+            # Init failed
+            self.running_status = RunningStatus.NOINIT
+            self.connection_status = ConnectionStatus.DISCONNECTED
+
+        self.update_buttons()
 
     def update_running_status(self, state):
         self.running_status = state
@@ -369,22 +335,6 @@ class ViewerMP(QMainWindow):
         self.experiment_settings_panel.update_button_states(
             self.connection_status, self.running_status
         )
-
-    def check_if_connect_succeeded(self):
-        flag = True
-        for runner in self.runners.values():
-            if runner["state"] != ConnectionStatus.CONNECTED:
-                flag = False
-
-        return flag
-
-    def on_init_failure(self, error_message):
-        self.running_status = RunningStatus.NOINIT
-        self.connection_status = ConnectionStatus.DISCONNECTED
-        self.update_buttons()
-
-        self.log_display_panel.log_message("error", error_message)
-        self.usrp = None
 
     def handle_time_window_change(self, seconds):
         self.plot_grid.set_display_time(seconds)

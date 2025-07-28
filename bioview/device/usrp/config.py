@@ -1,5 +1,5 @@
 from bioview.constants import BASE_USRP_CONFIG
-from bioview.types import Configuration
+from bioview.datatypes import Configuration
 
 
 class MultiUsrpConfiguration(Configuration):
@@ -43,6 +43,8 @@ class MultiUsrpConfiguration(Configuration):
     def get_disp_freq(self):
         return self.samp_rate / (self.save_ds * self.disp_ds)
 
+    def get_individual_configs(self):
+        return self.devices.values()
 
 class UsrpConfiguration(Configuration):
     def __init__(

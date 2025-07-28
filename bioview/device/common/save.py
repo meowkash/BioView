@@ -1,17 +1,17 @@
 import queue
 
-from PyQt6.QtCore import QThread, pyqtSignal
-
-from bioview.utils import init_save_file, update_save_file
+from bioview.utils import init_save_file, update_save_file, emit_signal
 
 
-class SaveWorker(QThread):
-    logEvent = pyqtSignal(str, str)
-
+class SaveWorker:
     def __init__(
         self, save_path, data_queue, num_channels, running: bool = False, parent=None
     ):
         super().__init__(parent)
+        # Signals 
+        self.log_event = None 
+        
+        # Variables
         self.running = running
 
         # Load output file
@@ -29,7 +29,7 @@ class SaveWorker(QThread):
             try:
                 data = self.data_queue.get()
             except queue.Empty:
-                self.logEvent.emit("debug", "No data to save")
+                emit_signal(self.logEvent, "debug", "No data to save")
                 continue
 
             update_save_file(self.save_path, data)

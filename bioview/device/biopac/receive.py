@@ -1,24 +1,22 @@
 import queue
 from ctypes import byref, c_double
-
-from PyQt6.QtCore import QThread, pyqtSignal
-
+from threading import Thread
 from .config import BiopacConfiguration
 from bioview.utils import wrap_result_code
 
-
-class ReceiveWorker(QThread):
-    logEvent = pyqtSignal(str, str)
-
+class ReceiveWorker(Thread):
     def __init__(
         self,
         biopac,
         config: BiopacConfiguration,
         rx_queue: queue.Queue,
-        running: bool = True,
-        parent=None,
+        running: bool = True
     ):
-        super().__init__(parent)
+        super().__init__()
+        # Signals
+        self.log_event = None 
+        
+        # Variables
         self.config = config
         self.biopac = biopac
         self.rx_queue = rx_queue
@@ -40,7 +38,7 @@ class ReceiveWorker(QThread):
                     self.rx_queue.put(sample)
 
         except Exception as e:
-            self.logEvent.emit("error", e)
+            self.log_event("error", e)
 
     def stop(self):
         wrap_result_code(self.mpdev.stopAcquisition())
